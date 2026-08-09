@@ -194,21 +194,88 @@ Systems festlegen.
 
 ## 5. VPN
 
-- VPN-Software: WireGuard / PiVPN
+### 5.1 Produktiver Ist- und Sollzustand
+
+- PiVPN ist installiert und wird zur Verwaltung von WireGuard verwendet.
+- WireGuard läuft nativ über `wg-quick@wg0.service`.
 - Interface: `wg0`
-- Nova VPN-IP: `10.9.0.1/24`
-- Die bestehende Routing- und DNS-Funktion muss erhalten bleiben.
-- Private Keys, Pre-Shared Keys und sonstige Secrets dürfen nicht im Repository
-  gespeichert werden.
+- VPN-Netz: `10.9.0.0/24`
+- Nova VPN-Adresse: `10.9.0.1/24`
+- Protokoll: UDP
+- Listen-Port: `51824`
+- LAN-Interface: `eth0`
+- Nova LAN-Adresse: `192.168.0.195/24`
+- Gateway: `192.168.0.1`
+- DNS für VPN-Clients: `10.9.0.1`
+- Öffentlicher Endpoint/Hostname: `bertrand.e-cloud.ch`
+- IPv4-Forwarding ist aktiviert.
+- VPN-Traffic aus `10.9.0.0/24` wird über `eth0` per MASQUERADE/NAT
+  weitergeleitet.
+- UFW wird nicht verwendet.
+- IPv6 für das VPN ist deaktiviert.
+- PiVPN ist für Full-Tunnel-Clients mit
+  `ALLOWED_IPS="0.0.0.0/0, ::0/0"` eingerichtet.
+- Unattended Upgrades sind laut PiVPN-Konfiguration aktiviert.
+- Die bestehende Routing- und DNS-Funktion muss beim Neuaufbau erhalten bleiben.
 
-**TODO:** Aktuelle PiVPN-/WireGuard-Versionen und Installationsart auslesen.
+### 5.2 MTU-Besonderheit
 
-**TODO:** Bestehende `wg0`-Konfiguration, Peer-Struktur, Firewall-Regeln,
-IP-Forwarding, Routing und DNS-Weitergabe auslesen; Secrets dabei ausschließlich
-über sichere Platzhalter oder einen separaten Wiederherstellungsweg abbilden.
+Zwischen der PiVPN-Konfiguration und der tatsächlich aktiven
+WireGuard-Konfiguration besteht eine bewusste beziehungsweise historisch
+entstandene Abweichung:
 
-**TODO:** Festlegen, wie vorhandene Keys und Peer-Konfigurationen später sicher
-eingespielt beziehungsweise wiederhergestellt werden.
+- In `/etc/pivpn/wireguard/setupVars.conf` steht aktuell `pivpnMTU=1200`.
+- In der tatsächlich aktiven `/etc/wireguard/wg0.conf` steht `MTU = 1420`.
+- Das laufende Interface `wg0` verwendet erfolgreich MTU 1420.
+- Aus früheren Erfahrungen ist bekannt, dass `pivpnMTU=1420` direkt in
+  `setupVars.conf` Probleme verursachen kann.
+- Deshalb darf `pivpnMTU=1420` nicht automatisch in `setupVars.conf` gesetzt
+  werden.
+- Die aktive WireGuard-MTU 1420 ist der derzeit funktionierende Referenzzustand.
+
+**TODO (wichtig, Atlas):** Beim Neuaufbau auf Atlas das MTU-Verhalten prüfen und
+ein reproduzierbares Verfahren bestimmen, das die funktionierende aktive MTU 1420
+herstellt, ohne ungeprüft `pivpnMTU=1420` in `setupVars.conf` zu setzen.
+
+### 5.3 Client- und Key-Strategie
+
+Bestehende WireGuard-Clients werden bewusst nicht restauriert. Es gelten folgende
+Vorgaben:
+
+- Keine privaten WireGuard-Keys dürfen im Repository gespeichert werden.
+- Keine Preshared Keys dürfen im Repository gespeichert werden.
+- Keine Client-Konfigurationen dürfen im Repository gespeichert werden.
+- Ein Restore alter WireGuard-Client-Keys ist nicht vorgesehen.
+- Bei einem Disaster Recovery werden die benötigten Clients mit PiVPN neu erzeugt.
+- Dieses Vorgehen ist bewusst gewählt, weil es einfacher und sicherer ist.
+- Peer-Namen und Public Keys sind nicht Bestandteil dieser
+  Infrastruktur-Spezifikation.
+
+### 5.4 Disaster-Recovery-Ablauf
+
+Der spätere Disaster-Recovery-Ablauf für WireGuard ist konzeptionell wie folgt:
+
+1. PiVPN und WireGuard installieren.
+2. Serverkonfiguration für Nova herstellen.
+3. `wg0` mit `10.9.0.1/24` bereitstellen.
+4. UDP-Port `51824` verwenden.
+5. IPv4-Forwarding und NAT/MASQUERADE herstellen.
+6. VPN-DNS auf `10.9.0.1` setzen.
+7. Endpoint `bertrand.e-cloud.ch` verwenden.
+8. MTU-Verhalten entsprechend dem auf Atlas verifizierten Verfahren herstellen.
+9. Keine alten Peers wiederherstellen.
+10. Benötigte Clients anschließend mit PiVPN neu anlegen.
+
+### 5.5 Firewall und nftables
+
+- Nova besitzt aktuell keine separate restriktive nftables-Firewall wie Arc.
+- Die vorhandenen nftables-Regeln stammen im Wesentlichen aus Docker
+  beziehungsweise der iptables-nft-Kompatibilität und dem VPN-NAT.
+- Docker verwaltet seine eigenen NAT- und Forwarding-Regeln.
+- Beim Neuaufbau dürfen Docker-verwaltete nftables-Regeln nicht statisch aus dem
+  alten System kopiert werden.
+- Nur die tatsächlich erforderliche VPN-Forwarding- und NAT-Funktion soll
+  reproduzierbar hergestellt werden.
 
 ## 6. DynDNS
 
@@ -406,5 +473,6 @@ rein lesende Bestandsaufnahme am produktiven Nova geklärt werden. Dabei gilt:
 
 | Datum | Änderung |
 | --- | --- |
+| 2026-08-09 | Bestandsaufnahme von WireGuard und PiVPN einschließlich MTU-, Client- und Firewall-Strategie ergänzt |
 | 2026-08-09 | Bestandsaufnahme von Unbound, AdGuard Home und DNS-Architektur ergänzt; Rolle von Atlas präzisiert |
 | 2026-08-09 | Initiale Erfassung des bisher bekannten Sollzustands |
