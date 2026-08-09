@@ -366,23 +366,144 @@ Konsistenzanforderungen vom produktiven System auslesen und dokumentieren.
 
 ## 8. Syncthing und Backups
 
-- Syncthing läuft auf Nova.
-- Die Backup-Verzeichnisstruktur muss reproduzierbar hergestellt werden können.
-- Vaultwarden-Backups sind Bestandteil der Sicherung.
-- Backups werden zur Synology synchronisiert.
-- Der Restore-Prozess muss Bestandteil der späteren Gesamtlösung sein.
+### 8.1 Zweck und Abgrenzung
 
-**TODO:** Syncthing-Version, Installationsart, Service-Benutzer, Daten- und
-Konfigurationspfade sowie relevante Ordnerzuordnungen von Nova auslesen.
+Syncthing hat auf Nova genau einen Zweck: die externe Replikation der bereits von
+der Vaultwarden-Appliance erzeugten Backups auf `Diskstation3`.
 
-**TODO:** Bestehende Backup-Verzeichnisstruktur, Berechtigungen,
-Aufbewahrungsregeln und Zeitpläne erfassen.
+- Syncthing erstellt selbst keine Vaultwarden-Backups.
+- Syncthing ist nicht für Retention, Backup-Validierung oder
+  Vaultwarden-Konsistenz verantwortlich.
+- Syncthing ist nicht als allgemeiner Datei-Synchronisationsdienst von Nova zu
+  betrachten.
+- Syncthing wird ausschließlich nachgelagert zur bestehenden
+  Vaultwarden-Backup-Architektur eingesetzt.
 
-**TODO:** Synchronisationsbeziehung zur Synology einschließlich Zielpfaden und
-erwartetem Verhalten erfassen; Gerätekennungen oder Zugangsdaten nur dann
-dokumentieren, wenn sie keine Secrets darstellen.
+### 8.2 Installation und Betrieb
 
-**TODO:** Vollständigen Restore-Prozess und dessen Validierung definieren.
+Produktiv läuft Syncthing als `syncthing@admin.service` unter dem Benutzer
+`admin`. Für den neuen Sollzustand gelten folgende Vorgaben:
+
+- Syncthing wird nativ installiert.
+- Das offizielle Syncthing-APT-Repository wird verwendet.
+- Es wird nicht ausschließlich die möglicherweise veraltete Syncthing-Version
+  aus dem Debian-Standard-Repository verwendet.
+- Der spätere Installer richtet APT-Repository und Keyring reproduzierbar ein.
+- Syncthing bleibt anschließend über das normale APT-System aktualisierbar.
+
+### 8.3 Bestehender und zukünftiger Ordner
+
+Der derzeitige alte Syncthing-Ordner auf Nova ist wie folgt konfiguriert:
+
+| Merkmal | Bestehender Wert |
+| --- | --- |
+| Label | `Vaultwarden` |
+| Folder-ID | `ycffz-zhzw9` |
+| Pfad | `~/backups/vaultwarden` |
+| Typ | `sendonly` |
+| Zielgerät | `Diskstation3` |
+| Filesystem Watcher | aktiviert |
+| Zusätzlicher Rescan | alle 3600 Sekunden |
+
+Der alte Pfad `~/backups/vaultwarden` wird nicht als zukünftiger Sollpfad
+übernommen. Der neue Syncthing-Folder zeigt auf `/opt/vaultwarden/backups` und
+behält die `sendonly`-Semantik sowie `Diskstation3` als Ziel bei.
+
+Die Folder-ID kann beim Neuaufbau neu erzeugt oder durch die restaurierte
+Syncthing-Konfiguration erhalten werden. Entscheidend sind der neue Pfad, der Typ
+`sendonly` und `Diskstation3` als Zielgerät.
+
+### 8.4 Integration mit der Vaultwarden-Appliance
+
+Die bestehende Backup-Architektur der Vaultwarden-Appliance wird nicht neu
+entworfen oder durch Syncthing verändert. Die Appliance erstellt ihre primären
+lokalen Backup-Generationen unter `/opt/vaultwarden/backups` und ist selbst für
+folgende Aufgaben verantwortlich:
+
+- konsistente Vaultwarden-Backups über `vwctl backup`
+- Validierung der Archive und SHA-256-Checksummen
+- lokale Aufbewahrung der neuesten sieben gültigen Generationen
+- automatische tägliche Backups um 02:30 Uhr lokaler Systemzeit
+- Ausführung über `vaultwarden-appliance-backup.timer` mit `Persistent=true`
+- Konsistenz, Validierung, lokale Retention, Capacity Checks und Locking
+
+Der geplante Datenfluss lautet:
+
+```text
+Vaultwarden-Live-Daten
+  -> vwctl backup
+  -> /opt/vaultwarden/backups
+  -> Syncthing (sendonly)
+  -> Diskstation3
+```
+
+Die Vaultwarden-Appliance bleibt unabhängig von Syncthing. Ein Ausfall von
+Syncthing darf die erfolgreiche lokale Erstellung eines Vaultwarden-Backups nicht
+verhindern. Die USB-Replikation ist eine vorhandene Fähigkeit der
+Vaultwarden-Appliance und bleibt ebenfalls unabhängig von Syncthing.
+
+### 8.5 Disaster Recovery und Syncthing-Identität
+
+Die aktuell relevanten Syncthing-Pfade auf Nova sind:
+
+| Inhalt | Pfad |
+| --- | --- |
+| Konfiguration | `/home/admin/.local/state/syncthing/config.xml` |
+| Device Private Key | `/home/admin/.local/state/syncthing/key.pem` |
+| Device Certificate | `/home/admin/.local/state/syncthing/cert.pem` |
+| GUI/API HTTPS Key | `/home/admin/.local/state/syncthing/https-key.pem` |
+| GUI/API HTTPS Certificate | `/home/admin/.local/state/syncthing/https-cert.pem` |
+| Datenbank | `/home/admin/.local/state/syncthing/index-v2` |
+| Log | `/home/admin/.local/state/syncthing/syncthing.log` |
+
+Für Disaster Recovery müssen mindestens folgende Dateien separat gesichert und
+wiederherstellbar sein:
+
+- `config.xml`
+- `key.pem`
+- `cert.pem`
+
+Durch den Restore von `key.pem` und `cert.pem` behält Nova seine bestehende
+Syncthing-Geräteidentität, sodass `Diskstation3` Nova weiterhin als dasselbe Gerät
+erkennen kann. Die bestehende `config.xml` dient als Restore-Basis, muss beim
+Neuaufbau jedoch den Sollpfad `/opt/vaultwarden/backups` verwenden.
+
+`index-v2` und `syncthing.log` müssen nicht restauriert werden. Die Datenbank darf
+nach dem Restore durch Syncthing neu aufgebaut werden.
+
+GUI/API-HTTPS-Key und -Zertifikat werden nur gesichert und restauriert, falls sich
+bei der späteren Implementierung herausstellt, dass sie für die konkrete
+GUI-Konfiguration benötigt werden.
+
+**TODO:** Bei der späteren Implementierung prüfen, ob
+`https-key.pem` und `https-cert.pem` für die konkrete GUI-Konfiguration gesichert
+und restauriert werden müssen.
+
+### 8.6 Secrets
+
+`key.pem` ist geheimes Schlüsselmaterial. Daher gelten folgende Vorgaben:
+
+- `key.pem` darf niemals im Git-Repository gespeichert werden.
+- Syncthing Private Keys dürfen nicht im Repository gespeichert werden.
+- Secrets dürfen nicht in dieser Spezifikation dokumentiert werden.
+- Restore-Dateien mit Secrets gehören in das separate geschützte
+  Disaster-Recovery- beziehungsweise Backup-Konzept.
+- Die Syncthing-Device-ID selbst ist kein Secret.
+
+### 8.7 Healthcheck
+
+Der spätere Nova-Healthcheck muss mindestens prüfen können:
+
+- `syncthing@admin.service` ist aktiv.
+- Die Syncthing-Konfiguration ist vorhanden.
+- Der Vaultwarden-Folder existiert.
+- Der konfigurierte Pfad ist `/opt/vaultwarden/backups`.
+- Der Folder-Typ ist `sendonly`.
+- Der lokale Backup-Pfad existiert.
+
+Eine fehlende oder nicht erreichbare `Diskstation3` darf als Warnung gemeldet
+werden. Sie darf jedoch nicht fälschlich als Fehlschlag der lokalen
+Vaultwarden-Backup-Erstellung gewertet werden.
 
 ## 9. 3D-Drucker und Kamera-Upload
 
@@ -531,6 +652,7 @@ rein lesende Bestandsaufnahme am produktiven Nova geklärt werden. Dabei gilt:
 
 | Datum | Änderung |
 | --- | --- |
+| 2026-08-09 | Syncthing-Bestandsaufnahme und Sollzustand für die nachgelagerte Vaultwarden-Backup-Replikation ergänzt |
 | 2026-08-09 | DynDNS-Bestandsaufnahme einschließlich Secret-, WireGuard- und Healthcheck-Anforderungen ergänzt |
 | 2026-08-09 | Bestandsaufnahme von WireGuard und PiVPN einschließlich MTU-, Client- und Firewall-Strategie ergänzt |
 | 2026-08-09 | Bestandsaufnahme von Unbound, AdGuard Home und DNS-Architektur ergänzt; Rolle von Atlas präzisiert |
