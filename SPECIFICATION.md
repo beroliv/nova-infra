@@ -427,19 +427,84 @@ Repository zu übernehmen.
 
 ### 7.5 Caddy-Integration
 
-Caddy wird, soweit es Bestandteil der Vaultwarden-Appliance ist, aus der
-bestehenden Appliance übernommen. Für Vaultwarden wird keine zweite unabhängige
-Caddy-Installation entwickelt.
+#### 7.5.1 Architektur
 
-Falls Nova Caddy zusätzlich als Reverse Proxy für weitere lokale Dienste nutzt,
-baut die spätere Nova-Integration auf der bestehenden Caddy-Installation auf und
-ergänzt diese gezielt, statt einen zweiten Caddy zu installieren. Dabei müssen die
-bestehenden lokalen DNS-Rewrites berücksichtigt werden, die bewusst auf Novas
-LAN-Adresse `192.168.0.195` zeigen.
+Nova verwendet genau eine gemeinsame Caddy-Instanz als lokalen
+HTTPS-Reverse-Proxy. Diese Instanz wird zuerst durch den bestehenden Installer von
+`vaultwarden-appliance` installiert. `nova-infra` installiert keine zweite
+Caddy-Instanz.
 
-**TODO:** Nach vollständiger Inventur der lokalen Dienste und DNS-Rewrites
-festlegen, welche zusätzlichen Reverse-Proxy-Routen die bestehende
-Caddy-Installation benötigt.
+Nach erfolgreicher Installation der Vaultwarden-Appliance ergänzt `nova-infra`
+die zusätzlich für Nova benötigten lokalen Reverse-Proxy-Einträge
+reproduzierbar, ohne die vorhandene Caddy-Konfiguration der Appliance zu
+beschädigen.
+
+Alle betreffenden lokalen Dienste verwenden Caddys interne CA über
+`tls internal`. Clients können dadurch nach Installation des Root-CA-Zertifikats
+ohne Zertifikatswarnungen auf die lokalen HTTPS-Dienste zugreifen.
+
+#### 7.5.2 Lokale HTTPS-Ziele
+
+Die folgenden produktiven Zuordnungen wurden auf Nova inventarisiert und bleiben
+grundsätzlich erhalten:
+
+| Hostname | Backend | TLS | Besonderheit |
+| --- | --- | --- | --- |
+| `vault.lan` | `vaultwarden:80` | internal | HTTP wird auf HTTPS umgeleitet |
+| `adguard-nova.lan` | `192.168.0.195:3000` | internal | AdGuard Home auf Nova |
+| `adguard-arc.lan` | `192.168.0.193:80` | internal | AdGuard Home auf Arc |
+| `ds3.lan` | `192.168.0.100:5000` | internal | DSM auf `Diskstation3` |
+| `syncthing-ds3.lan` | `192.168.0.100:8384` | internal | Syncthing auf `Diskstation3` |
+| `syncthing-nova.lan` | `192.168.0.195:8384` | internal | Syncthing auf Nova |
+
+Die Hostnamen müssen mit den entsprechenden AdGuard-DNS-Rewrites abgestimmt
+sein. Da der HTTPS-Zugriff über den gemeinsamen Caddy auf Nova erfolgt, zeigen
+die betreffenden Rewrites bewusst auf Novas LAN-Adresse `192.168.0.195`, auch
+wenn Caddy anschließend an einen Dienst auf einem anderen Host weiterleitet.
+Diese Rewrites dürfen nicht automatisch auf die jeweilige Backend-Adresse
+„korrigiert“ werden.
+
+Die gemeinsame Caddy-Instanz bedient damit:
+
+- Vaultwarden
+- AdGuard Home auf Nova
+- AdGuard Home auf Arc
+- DSM auf `Diskstation3`
+- Syncthing auf `Diskstation3`
+- Syncthing auf Nova
+
+#### 7.5.3 Nicht zu migrierende Altbestände
+
+- Der alte auskommentierte Eintrag `syncthing-lumen.lan` wird nicht migriert.
+- MediaMTX ist kein Bestandteil der zukünftigen Caddy-Konfiguration.
+
+Der aktuell produktive alte Nova-Vaultwarden-Stack verwendet unter anderem:
+
+- `/opt/vaultwarden/vw-data`
+- `/opt/vaultwarden/caddy-data`
+- `/opt/vaultwarden/caddy-config`
+
+Diese alte Compose- und Verzeichnisstruktur dient ausschließlich als Referenz und
+ist nicht der zukünftige Sollzustand. Für den Neuaufbau ist nur die bereits
+spezifizierte und gebaute `vaultwarden-appliance` maßgeblich. Daher gelten
+folgende Vorgaben:
+
+- Den alten Nova-Compose-Stack nicht kopieren.
+- Die alten Vaultwarden-Pfade nicht als neue Sollstruktur übernehmen.
+- Vaultwarden und Caddy zuerst über den bestehenden Installer von
+  `vaultwarden-appliance` installieren.
+- Anschließend ausschließlich die zusätzlichen lokalen Nova-Caddy-Einträge
+  reproduzierbar ergänzen.
+
+#### 7.5.4 Zertifikate und interne CA
+
+Die persistierenden Daten der bestehenden Caddy-CA werden beim Disaster Recovery
+manuell aus dem geschützten Backup wiederhergestellt. Private CA-Schlüssel und
+anderes geheimes Zertifikatsmaterial dürfen niemals im Git-Repository von
+`nova-infra` gespeichert werden.
+
+`nova-infra` erfindet die bestehende Vertrauenskette nicht neu, sondern baut auf
+der Caddy- und CA-Architektur der Vaultwarden-Appliance auf.
 
 ### 7.6 Backup und Syncthing
 
@@ -965,6 +1030,7 @@ rein lesende Bestandsaufnahme am produktiven Nova geklärt werden. Dabei gilt:
 
 | Datum | Änderung |
 | --- | --- |
+| 2026-08-09 | Produktive Caddy-Zuordnungen und Architektur der gemeinsamen lokalen HTTPS-Instanz dokumentiert |
 | 2026-08-09 | Verbindliche Integrations- und Projektabgrenzungsstrategie für die Vaultwarden-Appliance ergänzt |
 | 2026-08-09 | Verbindlichen Sollzustand für Prusa-Kamera-Upload und Watchdog dokumentiert |
 | 2026-08-09 | Anforderungen an das zukünftige dynamische Nova-MOTD ergänzt |
