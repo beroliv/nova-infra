@@ -1360,9 +1360,290 @@ Ein vollständiger Nova-Neuaufbau besteht aus zwei klar getrennten Bestandteilen
 Damit bleibt `nova-infra` vollständig reproduzierbar und secret-frei, ohne ein
 unnötig komplexes Secret-Management-System einzuführen.
 
-## 12. Test- und Einführungsstrategie
+## 12. Installer-Architektur
 
-### Rollen der Systeme
+### 12.1 Ziel und Einstiegspunkt
+
+Der spätere Installer baut einen möglichst leeren Raspberry Pi 5 mit Debian 13
+reproduzierbar als Nova Infrastructure Node auf. Der Einstieg soll über einen
+einzelnen curl-Aufruf möglich sein, sinngemäß:
+
+```shell
+curl -fsSL <raw-github-url>/install.sh | sudo bash
+```
+
+Die endgültige URL wird bei der Implementierung aus dem tatsächlichen Repository
+abgeleitet und nicht vorab erfunden. Der curl-Aufruf ist nur der Einstiegspunkt;
+intern darf und soll der Installer modular aufgebaut sein.
+
+### 12.2 Unterstützte Plattform und frühe Prüfung
+
+Der Installer unterstützt zunächst bewusst ausschließlich den vorgesehenen
+Nova-Zielzustand:
+
+- Raspberry Pi 5
+- ARM64 / aarch64
+- Debian 13 / trixie
+
+Plattform, Architektur und Distribution werden vor Änderungen klar geprüft. Bei
+nicht unterstützten Systemen bricht der Installer früh mit einer verständlichen
+Meldung ab. Er trifft keine stillen Annahmen über andere Distributionen oder
+Architekturen.
+
+### 12.3 Ausgangszustand und Referenzsysteme
+
+Als Testreferenz dient Atlas mit folgendem Ausgangszustand:
+
+- frisches Debian 13
+- ausgeführtes `apt update`
+- vollständiges Upgrade
+- vorhandener SSH-Zugriff
+- ansonsten möglichst leeres System
+
+Nova bleibt während der Entwicklung ein unangetastetes produktives
+Referenzsystem. Sämtliche destruktiven Installations-, Reinstallations- und
+Restore-Tests erfolgen ausschließlich auf Atlas.
+
+### 12.4 Modularer Aufbau
+
+Der Installer wird intern in klar getrennte Module beziehungsweise
+Installationsschritte gegliedert. Die genaue Dateistruktur wird bei der
+Implementierung festgelegt; logisch werden mindestens folgende Bereiche
+getrennt:
+
+- Basissystem
+- Repositories und Grundpakete
+- Docker
+- Unbound
+- AdGuard Home
+- WireGuard / PiVPN
+- DynDNS
+- Vaultwarden-Appliance-Integration
+- Syncthing
+- Prusa-Container
+- Caddy-Erweiterungen
+- MOTD
+
+Ein einzelnes Modul soll nach Möglichkeit separat erneut ausführbar sein, ohne das
+gesamte System neu zu installieren. Es wird keine unnötige Framework-Abhängigkeit
+eingeführt; Shell-Skripte sind für die spätere Implementierung ausreichend.
+
+### 12.5 Idempotenz und deterministische Änderungen
+
+Der Installer muss möglichst idempotent sein. Insbesondere gilt:
+
+- Mehrfaches Ausführen darf das System nicht beschädigen.
+- Bereits korrekte Verzeichnisse werden nicht unnötig neu angelegt.
+- Repositories werden nicht mehrfach eingetragen.
+- systemd-Units werden nicht mehrfach oder widersprüchlich erzeugt.
+- Docker-Repositories und Keyrings werden nicht dupliziert.
+- Benutzer und Gruppen werden nur bei Bedarf angelegt oder geändert.
+- Bestehende korrekte Konfigurationen werden nicht blind erweitert.
+- Konstruktionen wie `echo >>`, die bei Wiederholung mehrfache Einträge erzeugen,
+  werden vermieden.
+- Dateien werden deterministisch erzeugt oder kontrolliert ersetzt.
+- Erforderliche Änderungen werden in der Ausgabe klar benannt.
+
+### 12.6 Schutz produktiver Daten
+
+Der Installer darf produktive Nutzdaten und Secrets niemals blind löschen oder
+ersetzen. Besonders geschützt werden:
+
+- `/opt/vaultwarden/data`
+- `/opt/vaultwarden/backups`
+- persistente Caddy-Daten
+- private Syncthing-Schlüssel und die Geräteidentität
+- `/opt/nova-bootstrap/secrets.env`
+
+Werden vorhandene produktive Daten erkannt, handelt der Installer konservativ und
+bricht bei unklaren oder potenziell destruktiven Änderungen kontrolliert ab.
+
+### 12.7 Umgang mit lokalen Secrets
+
+Einfache lokale Secrets werden ausschließlich lesend aus
+`/opt/nova-bootstrap/secrets.env` geladen. Die Datei wird vor der Installation
+manuell bereitgestellt. Ergänzend zu Abschnitt 11 gelten für den Installer
+folgende Anforderungen:
+
+- Er gibt den Dateiinhalt nicht aus.
+- Er schreibt keine Secrets in Logs.
+- Er kopiert keine Secrets in das Repository.
+- Er zeigt keine Secrets im MOTD oder in Fehlermeldungen an.
+- Er erfindet keine geheimen Werte und bezieht sie nicht automatisch aus
+  unsicheren Quellen.
+
+Fehlt ein Secret für einen optionalen Dienst, nennt der Installer verständlich
+den fehlenden Variablennamen, beispielsweise `DYNDNS_URL`,
+`PRUSA_CONNECT_TOKEN` oder `PRUSA_CAMERA_URL`, ohne einen geheimen Wert
+auszugeben.
+
+### 12.8 Integration externer Projekte
+
+Die `vaultwarden-appliance` bleibt ein eigenständiges Projekt. Der
+Nova-Installer ruft deren bestehenden curl-Installer auf und ergänzt anschließend
+nur die Nova-spezifische Integration. `nova-infra` implementiert insbesondere
+nicht erneut:
+
+- den Vaultwarden-Compose-Stack
+- `vwctl`
+- die Vaultwarden Backup Engine
+- Restore-Funktionen der Appliance
+- die Caddy-Basisinstallation der Appliance
+- die USB-Backup-Logik
+
+### 12.9 Verbindliche Konfigurationsquellen
+
+Bewährte produktive Konfigurationen werden bevorzugt als reproduzierbare
+Referenz übernommen. Dies gilt insbesondere für:
+
+- die getestete Unbound-Konfiguration
+- die bereinigte AdGuard-Konfiguration
+- die definierten Caddy-Reverse-Proxy-Einträge
+- systemd-Services und Timer
+- die DynDNS-Logik
+
+Der Installer führt keine vermeintlichen Optimierungen ohne konkreten Grund ein.
+Wenn diese Spezifikation einen bestehenden Wert als getestet oder verbindlich
+bezeichnet, hat dieser Vorrang vor generischen Best Practices.
+
+### 12.10 APT-Repositories und Keyrings
+
+Externe offizielle Paketquellen werden reproduzierbar eingerichtet. Dazu gehören
+insbesondere:
+
+- das offizielle Docker-APT-Repository
+- das offizielle Syncthing-APT-Repository
+
+Repository-Keyrings werden unter einem modernen Pfad wie `/etc/apt/keyrings`
+verwaltet. Die veraltete `apt-key`-Methode wird nicht verwendet. Wenn laut
+Spezifikation ein offizielles Projekt-Repository erforderlich ist, darf der
+Installer nicht stillschweigend auf eine ältere Version aus den
+Debian-Standardpaketen zurückfallen.
+
+### 12.11 systemd
+
+Native Dienste und Timer werden über systemd verwaltet. Eigene Units müssen:
+
+- klar benannt sein
+- nur bei tatsächlichen Änderungen ein `systemctl daemon-reload` auslösen
+- dauerhaft benötigte Dienste aktivieren
+- spezifizierte Timer aktivieren
+- unnötige eigene Daemons vermeiden, wenn ein Timer oder Oneshot-Service genügt
+
+### 12.12 Docker
+
+Docker wird aus dem offiziellen Repository installiert und als normaler
+Systemdienst betrieben. Für eigene Nova-Container gelten folgende Grundsätze:
+
+- einfache Compose-Struktur
+- sinnvolle `restart`-Policy
+- keine zusätzlichen Docker-Healthchecks allein aus Prinzip
+- tatsächlichen Docker-Zustand später über das MOTD sichtbar machen
+- keine unnötigen Container einführen
+
+Fremd-Images dürfen ihre vorhandenen eigenen Healthchecks behalten;
+`nova-infra` ergänzt nicht pauschal weitere Healthchecks.
+
+### 12.13 Fehlerbehandlung und Logging
+
+Spätere Shell-Skripte sollen robust und verständlich fehlschlagen. Dazu gehören:
+
+- sinnvolle Verwendung von `set -euo pipefail`
+- klare Benennung des fehlgeschlagenen Installationsschritts
+- keine endlosen Fehlerketten nach einem kritischen Fehler
+- keine stillen Fehler, die ein unvollständiges System hinterlassen
+- keine Secrets in Fehlermeldungen
+- keine automatischen destruktiven Reparaturversuche
+- kontrollierter Abbruch, wenn ein Schritt nicht sicher ausgeführt werden kann
+
+Die Konsolenausgabe zeigt den aktuellen Installationsschritt sowie Erfolg,
+Warnungen und Fehler verständlich an. Der Normalbetrieb erzeugt keine übermäßig
+ausführliche Debug-Ausgabe. Ein später optionales Installationslog ist zulässig,
+muss Secrets jedoch redigieren beziehungsweise darf sie gar nicht erst ausgeben.
+
+### 12.14 Konservative Netzwerkänderungen
+
+Netzwerkänderungen werden besonders konservativ behandelt. Der Installer darf
+eine funktionierende SSH-Verbindung nicht unnötig gefährden und keine
+Interface-Konfiguration blind ersetzen. Maßgeblich sind:
+
+- Hauptinterface `eth0`
+- Nova LAN-Adresse `192.168.0.195/24`
+- Gateway `192.168.0.1`
+
+Die konkrete Netzwerkimplementierung wird zuerst auf Atlas getestet.
+
+### 12.15 MOTD
+
+Das MOTD wird erst erstellt, nachdem die benötigten Dienste installiert sind. Es
+dient ausschließlich der Anzeige und führt keine Reparaturaktionen aus. Ein
+Fehler im MOTD darf niemals den Login blockieren.
+
+### 12.16 Abgrenzung manueller Restore-Schritte
+
+Der Installer stellt die reproduzierbare Infrastruktur her. Folgende Schritte
+bleiben bewusst manuell beziehungsweise separat:
+
+- Vaultwarden-Restore
+- Caddy-CA- und Vaultwarden-Datenrestore über die Appliance-Funktionen
+- Restore der Syncthing-Geräteidentität
+- Neuerzeugung der WireGuard-Clients
+
+Der Installer dokumentiert diese Schritte klar, automatisiert sie aber nicht
+zwanghaft vollständig.
+
+### 12.17 Konzeptionelle Installationsreihenfolge
+
+Die technische Reihenfolge darf bei der Implementierung angepasst werden, wenn
+Abhängigkeiten dies erfordern. Konzeptionell gilt:
+
+1. Plattform prüfen.
+2. Basissystem vorbereiten.
+3. Externe APT-Repositories einrichten.
+4. Grundpakete installieren.
+5. Docker bereitstellen.
+6. Unbound installieren und konfigurieren.
+7. AdGuard Home installieren und konfigurieren.
+8. WireGuard / PiVPN einrichten.
+9. DynDNS einrichten.
+10. Vaultwarden-Appliance über deren bestehenden Installer installieren.
+11. Caddy um Nova-spezifische lokale Hosts ergänzen.
+12. Syncthing installieren und für die Vaultwarden-Backup-Replikation
+    vorbereiten.
+13. Prusa-Komponenten installieren.
+14. MOTD installieren.
+15. Abschließende Funktionsprüfung durchführen.
+
+### 12.18 Abschlussprüfung
+
+Es wird keine komplexe permanente Monitoring-Plattform gebaut. Nach der
+Installation muss jedoch ein einfacher Abschlusscheck mindestens prüfen können:
+
+- Basissystem ist plausibel eingerichtet.
+- Docker-Service läuft.
+- Unbound-Service läuft und antwortet auf dem erwarteten Port.
+- AdGuard-Service läuft und AdGuard antwortet auf Port 53.
+- `wg0` existiert.
+- DynDNS-Timer ist aktiv.
+- Vaultwarden- und Caddy-Container existieren nach der Appliance-Installation.
+- Syncthing-Service läuft.
+- Prusa-Watchdog-Container existiert beziehungsweise läuft.
+- MOTD-Datei ist installiert.
+
+Es werden keine unnötig komplexen Application-Level-Healthchecks ergänzt. Das
+MOTD bleibt die primäre schnelle Betriebsübersicht im Alltag.
+
+### 12.19 Verbindlichkeit der Spezifikation
+
+Bis zum Beginn der eigentlichen Implementierung bleibt `SPECIFICATION.md` die
+verbindliche Quelle für Architekturentscheidungen. Dokumentierte Entscheidungen
+dürfen bei der späteren Implementierung nicht stillschweigend geändert werden.
+Ist eine Anforderung technisch problematisch, wird dies gemeldet und nicht
+eigenmächtig umgebaut.
+
+## 13. Test- und Einführungsstrategie
+
+### 13.1 Rollen der Systeme
 
 - **Nova** bleibt zunächst das produktive Referenzsystem und wird während der
   Entwicklung nicht verändert.
@@ -1374,7 +1655,7 @@ unnötig komplexes Secret-Management-System einzuführen.
 - Sämtliche destruktiven Installations- und Wiederherstellungstests werden
   ausschließlich auf Atlas durchgeführt.
 
-### Späterer Zielablauf
+### 13.2 Späterer Zielablauf
 
 ```text
 frisches Debian 13
@@ -1384,7 +1665,7 @@ frisches Debian 13
   -> Healthcheck
 ```
 
-### Zu prüfende Ergebnisse
+### 13.3 Zu prüfende Ergebnisse
 
 - Basissystem und benötigte Pakete sind reproduzierbar eingerichtet.
 - Alle vorgesehenen systemd Services und Timer sind aktiv und korrekt geplant.
@@ -1403,10 +1684,26 @@ frisches Debian 13
 **TODO:** Detaillierten Healthcheck-Katalog mit Prüfmethoden, Sollwerten,
 Fehlerfällen und Abnahmekriterien erstellen.
 
-**TODO:** Anforderungen an Wiederholbarkeit und Idempotenz des späteren Installers
-festlegen.
+### 13.4 Installer-Tests auf Atlas
 
-## 13. Offene Erhebung am Referenzsystem Nova
+Die erste Implementierung muss vollständig auf Atlas getestet werden. Die
+Testziele umfassen mindestens:
+
+- Installation auf sauberem Debian 13
+- erneutes Ausführen des vollständigen Installers
+- erneutes Ausführen einzelner Module
+- Reboot des Systems
+- korrekter Start der Dienste nach dem Reboot
+- weiterhin aktive Timer
+- erwartungsgemäß erneut gestartete Docker-Container
+- funktionierendes MOTD
+- keine Secrets im Git-Repository
+- keine Beschädigung produktiver Daten
+
+Erst wenn der Aufbau auf Atlas reproduzierbar funktioniert, darf ein späterer
+Einsatz auf Nova in Betracht gezogen werden.
+
+## 14. Offene Erhebung am Referenzsystem Nova
 
 Die in den vorherigen Abschnitten markierten `TODO`-Punkte müssen zunächst durch
 rein lesende Bestandsaufnahme am produktiven Nova geklärt werden. Dabei gilt:
@@ -1419,10 +1716,11 @@ rein lesende Bestandsaufnahme am produktiven Nova geklärt werden. Dabei gilt:
 - Erst nach dieser Bestandsaufnahme werden Implementierungsentscheidungen für den
   späteren Installer getroffen.
 
-## 14. Änderungsverlauf
+## 15. Änderungsverlauf
 
 | Datum | Änderung |
 | --- | --- |
+| 2026-08-09 | Verbindliche Architektur, Idempotenz- und Testanforderungen für den zukünftigen Installer ergänzt |
 | 2026-08-09 | AdGuard-Home-Sollzustand einschließlich Upstreams, Rewrites, Filter und Fallback-Strategie finalisiert |
 | 2026-08-09 | Bestandsaufnahme des Nova-Basissystems und verbindliche Bootstrap-Anforderungen ergänzt |
 | 2026-08-09 | Secret- und Disaster-Recovery-Konzept einschließlich lokaler Installer-Secrets und dateibasierter Restore-Daten ergänzt |
