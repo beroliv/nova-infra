@@ -227,55 +227,113 @@ die späteren Restore-Abläufe relevant sind.
 
 ### 4.1 AdGuard Home
 
-- AdGuard Home stellt die DNS-Filterfunktion bereit.
-- Produktive Version: AdGuard Home v0.107.78
-- AdGuard Home ist nativ unter `/opt/AdGuardHome` installiert.
+Die bestehende produktive AdGuard-Konfiguration dient als Referenz und wird
+weitgehend übernommen. Historische oder künftig nicht mehr benötigte
+Atlas-Einträge werden entfernt.
+
+#### 4.1.1 Installation und Aufgaben
+
+- Produktive Referenzversion: AdGuard Home v0.107.78
+- Native Installation unter `/opt/AdGuardHome`
 - systemd-Service: `AdGuardHome.service`
-- DNS-Port: TCP/UDP 53
-- Port der Weboberfläche: 3000
-- Produktive Konfiguration: `/opt/AdGuardHome/AdGuardHome.yaml`
-- DHCP ist deaktiviert.
-- Der AdGuard-eigene DNS-Cache ist bewusst deaktiviert.
-- DNSSEC ist in AdGuard deaktiviert; die Resolver-Funktion liegt bei Unbound.
-- Filterung und Protection sind aktiviert.
-- Die bestehenden Filterlisten und User-Regeln sollen übernommen werden.
-- Querylog, `stats.db` und `sessions.db` sind Laufzeitdaten und müssen weder im
-  Git-Repository noch im Infrastruktur-Restore enthalten sein.
-- Die DNS-Funktion muss später durch Healthchecks geprüft werden.
+- Produktive Referenzkonfiguration:
+  `/opt/AdGuardHome/AdGuardHome.yaml`
+- DNS: TCP/UDP Port 53
+- Weboberfläche: Port 3000
+- DHCP: deaktiviert
+- AdGuard-eigener DNS-Cache: bewusst deaktiviert
+- DNSSEC in AdGuard: deaktiviert
+- Filterung und Protection: aktiviert
 
-#### Zukünftige Upstreams
+Resolver-, Cache- und DNSSEC-Aufgaben liegen bei Unbound. Die DNS-Funktion muss
+später durch Healthchecks geprüft werden.
 
-Der neue produktive Sollzustand verwendet nur noch diese beiden regulären,
-internen Unbound-Upstreams:
+#### 4.1.2 Upstreams, Fallback und Bootstrap
 
-- `127.0.0.1:5335` — Unbound auf Nova
+Der zukünftige produktive AdGuard verwendet genau zwei reguläre interne
+DNS-Upstreams:
+
+- `127.0.0.1:5335` — lokaler Unbound auf Nova
 - `192.168.0.193:5335` — Unbound auf Arc
 
-Der bisherige Upstream `192.168.0.192:5335` wird nicht migriert. Diese Adresse
-gehörte Atlas; Atlas wird aus der produktiven DNS-Infrastruktur entfernt und
-künftig ausschließlich als Testsystem verwendet.
+`upstream_mode: parallel` wird beibehalten. Die beiden internen
+Unbound-Instanzen bilden die gewünschte DNS-Redundanz.
 
-Die derzeit konfigurierten öffentlichen `fallback_dns` sind getrennt von den
-beiden regulären internen Upstreams zu behandeln.
+Nicht migriert werden:
 
-**TODO:** Öffentliche `fallback_dns` separat bewerten und den zukünftigen Umgang
-damit festlegen.
+- `192.168.0.192:5335` — ehemaliger Atlas-Upstream
+- der derzeit auskommentierte öffentliche Quad9-DoH-Upstream
 
-#### Lokale DNS-Rewrites und Caddy
+Atlas wird ausschließlich als Testsystem verwendet und ist kein Bestandteil der
+produktiven DNS-Infrastruktur.
 
-Mehrere lokale DNS-Namen zeigen absichtlich auf `192.168.0.195`, die LAN-Adresse
-von Nova. Dort arbeitet Caddy als Reverse Proxy, leitet Anfragen an die jeweiligen
-Backend-Dienste weiter und stellt HTTPS bereit, damit Clients keine
-Zertifikatswarnungen erhalten. Diese Rewrites dürfen deshalb nicht automatisch
-als falsche IP-Adressen korrigiert werden.
+Die bisherigen öffentlichen Fallback-Resolver werden nicht übernommen. Google,
+Cloudflare und direkte öffentliche Quad9-Resolver dürfen nicht als
+AdGuard-Fallback verwendet werden. `fallback_dns` bleibt im neuen Sollzustand
+leer. DNS soll sichtbar fehlschlagen, wenn beide vorgesehenen internen
+Unbound-Instanzen nicht verfügbar sind, statt die definierte Resolver-Kette
+unbemerkt zu umgehen.
 
-Der bisherige Rewrite `atlas.lan -> 192.168.0.192` wird nicht migriert.
+Davon unabhängig dürfen die bestehenden `bootstrap_dns` beibehalten werden:
 
-**TODO:** Alle übrigen bestehenden Rewrites vor der endgültigen Migration
-vollständig inventarisieren und auf weiterhin benötigte Dienste prüfen.
+- `9.9.9.10`
+- `149.112.112.10`
 
-**TODO:** Bestimmen, welche Anteile der produktiven AdGuard-Konfiguration
-reproduzierbar ins Repository dürfen und welche separat eingespielt werden müssen.
+#### 4.1.3 Lokale DNS-Rewrites und Caddy
+
+Folgende Rewrites werden übernommen:
+
+| Hostname | Zieladresse |
+| --- | --- |
+| `arc.lan` | `192.168.0.193` |
+| `ds3.lan` | `192.168.0.195` |
+| `adguard-nova.lan` | `192.168.0.195` |
+| `adguard-arc.lan` | `192.168.0.195` |
+| `vault.lan` | `192.168.0.195` |
+| `nova.lan` | `192.168.0.195` |
+| `syncthing-nova.lan` | `192.168.0.195` |
+| `syncthing-ds3.lan` | `192.168.0.195` |
+
+Die auf `192.168.0.195` zeigenden Einträge sind absichtlich so konfiguriert.
+Diese Adresse gehört Nova und dient für die lokalen HTTPS-Namen als
+Caddy-Reverse-Proxy-Endpunkt. Caddy leitet anschließend an die jeweiligen
+eigentlichen Backends weiter. Die Rewrites dürfen daher nicht automatisch auf
+die Backend-Adressen „korrigiert“ werden.
+
+Der historische Rewrite `atlas.lan -> 192.168.0.192` wird nicht migriert.
+
+#### 4.1.4 Filter
+
+Folgende bestehende produktive Filterlisten werden übernommen:
+
+- AdGuard DNS filter
+- AdAway Default Blocklist
+- HaGeZi's Normal Blocklist
+- HaGeZi's Allowlist Referral
+
+Die bestehenden lokalen User-Rules werden ebenfalls übernommen. Filterlisten
+werden weder allein aus Prinzip ergänzt noch durch vermeintlich bessere Listen
+ersetzt.
+
+#### 4.1.5 Laufzeitdaten
+
+Folgende Laufzeitdaten sind nicht Bestandteil des reproduzierbaren
+Infrastrukturzustands und müssen beim Neuaufbau nicht restauriert werden:
+
+- `querylog.json`
+- `stats.db`
+- `sessions.db`
+
+#### 4.1.6 Konfigurationsstrategie
+
+Die bestehende `/opt/AdGuardHome/AdGuardHome.yaml` dient als Referenz für den
+späteren reproduzierbaren Sollzustand. Dabei gelten folgende Vorgaben:
+
+- bewährte DNS- und Filterparameter erhalten
+- Atlas-Einträge entfernen
+- keine unnötigen historischen Laufzeitdaten übernehmen
+- keine eigenständigen „Optimierungen“ der getesteten DNS-Architektur durchführen
+- keine Secrets ins Repository übernehmen
 
 ### 4.2 Unbound
 
@@ -346,8 +404,9 @@ Der geplante normale DNS-Pfad lautet:
 ```text
 Clients
   -> AdGuard Home auf Nova (TCP/UDP Port 53)
-  -> Unbound auf Nova (127.0.0.1:5335)
-     und Unbound auf Arc (192.168.0.193:5335)
+  -> parallel:
+     - Unbound auf Nova (127.0.0.1:5335)
+     - Unbound auf Arc (192.168.0.193:5335)
   -> Upstream- beziehungsweise rekursive Auflösung gemäß Unbound-Konfiguration
 ```
 
@@ -1364,6 +1423,7 @@ rein lesende Bestandsaufnahme am produktiven Nova geklärt werden. Dabei gilt:
 
 | Datum | Änderung |
 | --- | --- |
+| 2026-08-09 | AdGuard-Home-Sollzustand einschließlich Upstreams, Rewrites, Filter und Fallback-Strategie finalisiert |
 | 2026-08-09 | Bestandsaufnahme des Nova-Basissystems und verbindliche Bootstrap-Anforderungen ergänzt |
 | 2026-08-09 | Secret- und Disaster-Recovery-Konzept einschließlich lokaler Installer-Secrets und dateibasierter Restore-Daten ergänzt |
 | 2026-08-09 | Produktive Caddy-Zuordnungen und Architektur der gemeinsamen lokalen HTTPS-Instanz dokumentiert |
