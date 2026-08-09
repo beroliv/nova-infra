@@ -279,15 +279,73 @@ Der spätere Disaster-Recovery-Ablauf für WireGuard ist konzeptionell wie folgt
 
 ## 6. DynDNS
 
-- Anbieter: FreeDNS
-- Ausführung über einen systemd Service und einen systemd Timer
-- Aktualisierung derzeit ungefähr stündlich
-- Token und andere Secrets dürfen nicht im Repository gespeichert werden.
+### 6.1 Produktiver Ist-Zustand
 
-**TODO:** Bestehenden Service, Timer, tatsächliches Intervall, Update-Aufruf,
-Abhängigkeiten und Fehlerbehandlung vom produktiven Nova auslesen.
+- Anbieter: FreeDNS / `freedns.afraid.org`
+- systemd-Service: `dyndns.service`
+- Service-Typ: `oneshot`
+- Ausführendes Skript: `/usr/local/bin/dyndns-update.sh`
+- Der Service startet nach `network-online.target`.
+- systemd-Timer: `dyndns.timer`
+- Timer-Einstellungen:
+  - `OnBootSec=2min`
+  - `OnUnitActiveSec=60min`
+  - `Persistent=true`
+- Der Timer ist aktiviert.
+- Der letzte geprüfte Lauf war erfolgreich.
+- Zwischen den Läufen ist `dyndns.service` erwartungsgemäß `inactive (dead)`, da
+  es sich um einen Oneshot-Service handelt. Dieser Zustand ist allein kein Fehler.
 
-**TODO:** Sicheren Bereitstellungsweg für das FreeDNS-Token festlegen.
+### 6.2 Update-Logik
+
+Die bestehende einfache Skriptlogik soll bevorzugt beibehalten und nicht unnötig
+durch einen Container oder komplexere Mechanismen ersetzt werden:
+
+- Bash mit `set -euo pipefail`
+- DynDNS-Update über `curl`
+- Curl-Optionen: `-fsS`
+- Timeout: 15 Sekunden
+- FreeDNS meldet in seiner Antwort selbst, ob sich die öffentliche IP geändert
+  hat.
+- Enthält die Antwort `has not changed`, wird dies als erfolgreicher,
+  unveränderter Zustand protokolliert.
+- Eine eigene Datei zur Speicherung der letzten öffentlichen IP wird nicht
+  benötigt.
+
+### 6.3 Secret-Behandlung
+
+Im produktiven Skript ist derzeit die vollständige FreeDNS-Update-URL enthalten.
+Diese URL enthält ein geheimes Update-Token und darf daher nicht unverändert
+übernommen werden. Für den neuen Sollzustand gelten folgende Vorgaben:
+
+- Die echte FreeDNS-Update-URL beziehungsweise das Token darf nicht im Repository
+  gespeichert werden.
+- Die nicht geheime Skriptlogik darf später im Repository gespeichert werden.
+- Das Secret wird zur Laufzeit aus einer separaten lokalen, nur für `root`
+  lesbaren Konfigurations- oder Environment-Datei geladen.
+- Eine Beispiel- oder Template-Datei ohne Secret darf im Repository gespeichert
+  werden.
+
+**TODO:** Die genaue technische Umsetzung der lokalen Secret-Datei und ihrer
+Einbindung beim späteren Installer festlegen.
+
+### 6.4 Abhängigkeit zu WireGuard
+
+DynDNS hält den öffentlichen Hostnamen `bertrand.e-cloud.ch` aktuell. Dieser
+Hostname wird als öffentlicher WireGuard-/PiVPN-Endpoint verwendet. Eine Störung
+von DynDNS kann daher die Erreichbarkeit des VPNs nach einer Änderung der
+öffentlichen IP beeinträchtigen.
+
+### 6.5 Healthcheck
+
+Der spätere DynDNS-Healthcheck muss mindestens prüfen können:
+
+- `dyndns.timer` ist enabled und active.
+- Der letzte Lauf von `dyndns.service` war erfolgreich.
+- Der Timer besitzt einen nächsten Ausführungstermin.
+
+Der erwartete Zustand `inactive (dead)` des Oneshot-Service zwischen zwei Läufen
+darf dabei nicht als Fehler gewertet werden.
 
 ## 7. Vaultwarden
 
@@ -473,6 +531,7 @@ rein lesende Bestandsaufnahme am produktiven Nova geklärt werden. Dabei gilt:
 
 | Datum | Änderung |
 | --- | --- |
+| 2026-08-09 | DynDNS-Bestandsaufnahme einschließlich Secret-, WireGuard- und Healthcheck-Anforderungen ergänzt |
 | 2026-08-09 | Bestandsaufnahme von WireGuard und PiVPN einschließlich MTU-, Client- und Firewall-Strategie ergänzt |
 | 2026-08-09 | Bestandsaufnahme von Unbound, AdGuard Home und DNS-Architektur ergänzt; Rolle von Atlas präzisiert |
 | 2026-08-09 | Initiale Erfassung des bisher bekannten Sollzustands |
