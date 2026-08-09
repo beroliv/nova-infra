@@ -939,14 +939,25 @@ werden kann. Bis dahin wird kein MOTD-Skript erstellt.
 **TODO:** Bestehende MOTD-Skripte, Ausgabe, Pfade und Statuslogik vom produktiven
 Nova als mögliche Referenz beziehungsweise Fallback auslesen.
 
-## 11. Secrets und Repository-Regeln
+## 11. Secrets und Disaster Recovery
+
+### 11.1 Grundprinzip und Repository-Regeln
+
+Das Git-Repository `nova-infra` bleibt vollständig frei von Secrets und
+produktiven privaten Schlüsseln. Die komplette reproduzierbare Infrastruktur
+gehört ins Repository; maschinenspezifische Secrets und Restore-Daten werden
+separat lokal auf einem geschützten Restore-Medium, beispielsweise einem
+geschützten USB-Stick, aufbewahrt.
+
+Es wird kein zusätzliches komplexes Secret-Management-System eingeführt.
 
 Folgende Inhalte dürfen niemals im Repository gespeichert werden:
 
 - Passwörter
 - API-Tokens
 - private Keys
-- Zertifikats-Secrets
+- Zertifikats-Secrets und CA-Private-Key-Material
+- produktive Daten und Backupgenerationen
 - sonstige geheime Zugangsdaten
 
 Private LAN-IP-Adressen dürfen im Repository dokumentiert werden.
@@ -957,16 +968,172 @@ Zusätzlich gelten folgende Grundsätze:
   erfunden zu werden.
 - Standardsoftware wird möglichst über vorhandene Debian-Pakete oder gepflegte
   Docker-Images eingesetzt.
-- Konfigurationen müssen klar zwischen nicht geheimen, versionierbaren Anteilen
-  und separat bereitzustellenden Secrets trennen.
-- Beispiele und Vorlagen für geheime Werte dürfen ausschließlich erkennbare
-  Platzhalter enthalten.
+- Konfigurationen trennen klar zwischen nicht geheimen, versionierbaren Anteilen
+  und separat bereitzustellenden Secrets.
+- Beispiele und Vorlagen für geheime Werte enthalten ausschließlich leere oder
+  offensichtlich nicht produktive Platzhalter.
+- Es werden keine Secrets unnötig erhoben oder in lokale Secret-Dateien
+  aufgenommen.
 
 **TODO:** Vor der späteren Übernahme bestehender Dateien jede Konfiguration auf
 eingebettete Secrets prüfen und diese auslagern.
 
-**TODO:** Verfahren zur sicheren Übergabe, Speicherung und Rotation aller Secrets
-festlegen.
+### 11.2 Lokale Installer-Secrets
+
+Für einfache Variablen verwendet die spätere Installation die lokale Datei:
+
+```text
+/opt/nova-bootstrap/secrets.env
+```
+
+Für diese Datei gelten folgende Anforderungen:
+
+- Sie liegt niemals im Git-Repository.
+- Sie wird vor der Installation manuell vom Restore-Medium nach Nova kopiert.
+- Eigentümer und Gruppe sind `root:root`.
+- Der Dateimodus ist `0600`.
+- Der spätere Installer verwendet sie ausschließlich lesend.
+- Sie enthält nur einfache Konfigurationswerte und Secrets, die während der
+  Installation tatsächlich benötigt werden.
+
+Nach aktuellem Stand gehören insbesondere folgende Variablen hinein:
+
+- `DYNDNS_URL`
+- `PRUSA_CONNECT_TOKEN`
+- `PRUSA_CAMERA_URL`
+
+Enthält die Kamera-URL Zugangsdaten, wird die gesamte URL als Secret behandelt.
+Weitere Variablen dürfen während der späteren Implementierung nur ergänzt werden,
+wenn ein tatsächlicher Bedarf besteht.
+
+### 11.3 Repository-Vorlage
+
+Bei der späteren Implementierung wird im Repository eine Vorlage wie
+`secrets.env.example` bereitgestellt. Sie enthält ausschließlich Variablennamen
+und leere oder offensichtlich nicht produktive Platzhalter, beispielsweise:
+
+```dotenv
+DYNDNS_URL=""
+PRUSA_CONNECT_TOKEN=""
+PRUSA_CAMERA_URL=""
+```
+
+Die produktive `secrets.env` muss durch `.gitignore` ausgeschlossen werden. In
+dieser Spezifikationsphase werden weder die Vorlage noch eine `.env`- oder
+`.gitignore`-Datei erstellt.
+
+### 11.4 Dateibasierte Restore-Daten
+
+Binäre Daten, Konfigurationsdateien, Datenbanken, Zertifikate und private Schlüssel
+werden nicht künstlich als Environment-Variablen gespeichert. Insbesondere
+gehören nicht in `secrets.env`:
+
+- Syncthing `config.xml`
+- Syncthing `key.pem`
+- Syncthing `cert.pem`
+- Vaultwarden-Backupgenerationen
+- Caddy-CA-Daten
+- Vaultwarden-Datenbanken
+- sonstige größere Restore-Artefakte
+
+Diese Daten bleiben als Dateien auf dem geschützten Restore-Medium. Dessen genaue
+Mountposition wird nicht unnötig fest verdrahtet.
+
+Eine mögliche konzeptionelle Struktur lautet:
+
+```text
+nova-restore/
+├── secrets.env
+├── syncthing/
+│   ├── config.xml
+│   ├── key.pem
+│   └── cert.pem
+└── vaultwarden/
+    └── Vaultwarden-Backupgeneration(en)
+```
+
+### 11.5 Wiederherstellung von Syncthing
+
+Für die Wiederherstellung der bestehenden Syncthing-Geräteidentität werden
+separat gesichert:
+
+- `config.xml`
+- `key.pem`
+- `cert.pem`
+
+Diese Dateien werden beim Disaster Recovery gezielt an die in Abschnitt 8.5
+dokumentierten Syncthing-Pfade zurückgespielt. `key.pem` ist Secret-Material und
+darf niemals ins Repository gelangen.
+
+### 11.6 Wiederherstellung von Vaultwarden und Caddy
+
+Vaultwarden wird weiterhin über die bestehende `vaultwarden-appliance`
+installiert. Anschließend wird eine gültige vorhandene
+Vaultwarden-Backupgeneration manuell über die von der Appliance bereitgestellte
+Restore-Funktion wiederhergestellt.
+
+Die Vaultwarden-Backups enthalten gemäß der bestehenden Appliance-Spezifikation
+auch die benötigten persistenten Caddy-Daten einschließlich der internen CA. So
+kann die bestehende lokale Caddy-Vertrauenskette nach einem Disaster Recovery
+erhalten bleiben.
+
+Vaultwarden-Backupgenerationen und privates Caddy- beziehungsweise
+CA-Schlüsselmaterial dürfen niemals im Git-Repository gespeichert werden.
+
+### 11.7 WireGuard nach Disaster Recovery
+
+Bestehende private WireGuard-Client-Keys und Preshared Keys werden bewusst nicht
+als Teil des Nova-Disaster-Recovery gesichert. Nach einem vollständigen Neuaufbau
+werden benötigte WireGuard-Clients neu erzeugt und verteilt.
+
+WireGuard-Client-Secrets dürfen weder ins Repository noch in `secrets.env`
+übernommen werden.
+
+### 11.8 Konzeptioneller Neuaufbau
+
+Der spätere Disaster-Recovery-Ablauf ist konzeptionell wie folgt:
+
+1. Frisches unterstütztes Debian auf dem Raspberry Pi installieren.
+2. System aktualisieren.
+3. Geschütztes Restore-Medium bereitstellen.
+4. `/opt/nova-bootstrap` anlegen.
+5. `secrets.env` nach `/opt/nova-bootstrap/secrets.env` kopieren und Eigentümer,
+   Gruppe sowie Modus sicher setzen.
+6. Den zukünftigen curl-Installer von `nova-infra` starten.
+7. Der Installer baut die reproduzierbare Infrastruktur auf und verwendet die
+   vorhandenen einfachen Secrets.
+8. Vaultwarden über die vorhandene Appliance-Restore-Funktion manuell
+   wiederherstellen.
+9. Syncthing-Konfiguration und Geräteidentität gezielt wiederherstellen.
+10. WireGuard-Clients neu erzeugen.
+11. Abschließende Funktionskontrolle durchführen.
+
+Die genaue Reihenfolge darf bei der späteren Implementierung technisch angepasst
+werden, wenn Abhängigkeiten dies erfordern.
+
+### 11.9 Installer-Verhalten bei Secrets
+
+Fehlt für einen optionalen Dienst ein benötigtes Secret, gibt der spätere
+Installer eine klare und verständliche Meldung aus. Fehlende Secrets werden
+eindeutig beim Variablennamen benannt, damit beim Restore sofort erkennbar ist,
+was noch manuell bereitgestellt werden muss.
+
+Der Installer darf:
+
+- keine Secrets erfinden
+- keine geheimen Werte aus dem Internet oder Git beziehen
+- keine Secrets in Logs, MOTD oder Fehlermeldungen ausgeben
+
+### 11.10 Zielbild
+
+Ein vollständiger Nova-Neuaufbau besteht aus zwei klar getrennten Bestandteilen:
+
+1. reproduzierbare Infrastruktur aus dem öffentlichen Git-Repository
+2. wenige lokale Secrets und dateibasierte Restore-Daten vom geschützten
+   Restore-Medium
+
+Damit bleibt `nova-infra` vollständig reproduzierbar und secret-frei, ohne ein
+unnötig komplexes Secret-Management-System einzuführen.
 
 ## 12. Test- und Einführungsstrategie
 
@@ -1030,6 +1197,7 @@ rein lesende Bestandsaufnahme am produktiven Nova geklärt werden. Dabei gilt:
 
 | Datum | Änderung |
 | --- | --- |
+| 2026-08-09 | Secret- und Disaster-Recovery-Konzept einschließlich lokaler Installer-Secrets und dateibasierter Restore-Daten ergänzt |
 | 2026-08-09 | Produktive Caddy-Zuordnungen und Architektur der gemeinsamen lokalen HTTPS-Instanz dokumentiert |
 | 2026-08-09 | Verbindliche Integrations- und Projektabgrenzungsstrategie für die Vaultwarden-Appliance ergänzt |
 | 2026-08-09 | Verbindlichen Sollzustand für Prusa-Kamera-Upload und Watchdog dokumentiert |
