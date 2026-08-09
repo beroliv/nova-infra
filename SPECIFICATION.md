@@ -538,28 +538,151 @@ aktuellen Namen des Upload-Containers vom produktiven Nova auslesen.
 
 ## 10. MOTD und Statusübersicht
 
-Die MOTD muss wieder vorhanden sein und mindestens folgende Informationen zeigen:
+### 10.1 Zweck
+
+Nova zeigt beim SSH-Login ein kompaktes dynamisches MOTD. Es dient nicht der
+Dekoration, sondern als schnelle Übersicht über den Zustand des Infrastructure
+Nodes. Innerhalb weniger Sekunden soll erkennbar sein, was Nova ist, wie es dem
+System geht und welche relevanten Dienste und Container aktuell laufen.
+
+Das MOTD wird neu implementiert. Das bestehende alte MOTD kann bei der späteren
+Umsetzung als Referenz oder Fallback herangezogen werden, falls die neue
+Implementierung keinen Vorteil bietet.
+
+### 10.2 Kopfbereich
+
+Der Kopfbereich identifiziert Nova eindeutig, beispielsweise sinngemäß als:
+
+```text
+NOVA — Infrastructure Node
+```
+
+Mindestens folgende Angaben müssen erkennbar sein:
 
 - Hostname
+- Rolle als Infrastructure Node
+- Raspberry Pi
+- Debian-Version
+- Architektur
+
+Die genaue optische Gestaltung wird bei der späteren Implementierung festgelegt.
+Das Ergebnis muss übersichtlich und terminaltauglich bleiben.
+
+### 10.3 Systeminformationen
+
+Direkt unter dem Kopfbereich werden kompakt angezeigt:
+
 - Uptime
-- Load
-- Speicherplatz
 - CPU-Temperatur
-- Status von AdGuard Home
-- Status von Unbound
-- Status von WireGuard
-- Status von Docker
-- Status von Vaultwarden
-- Status von Syncthing
-- Status von DynDNS
-- Status der Backups
-- optional: Status des Prusa-Systems
+- Auslastung des Root-Dateisystems
+- Gesamtkapazität sowie verwendeter und verfügbarer Speicherplatz
+- System Load
+
+Unnötig ausführliche Hardwareinformationen werden nicht angezeigt.
+
+### 10.4 Native Dienste
+
+Ein eigener Bereich zeigt die tatsächlichen Zustände der für Nova relevanten
+nativen beziehungsweise systemd-basierten Dienste kompakt an, beispielsweise
+`active`, `inactive` oder `failed`. Fehlerhafte Zustände müssen klar erkennbar
+sein.
+
+Nach aktuellem Stand gehören mindestens dazu:
+
+- AdGuard Home
+- Unbound
+- WireGuard / `wg-quick@wg0`
+- Syncthing
+- DynDNS Timer
+- Vaultwarden Backup Timer
+
+Diese Liste ist ausdrücklich noch nicht vollständig. Die endgültige Liste wird
+erst nach Abschluss der gesamten Nova-Bestandsaufnahme anhand dieser Spezifikation
+festgelegt.
+
+**TODO:** Nach Abschluss der Nova-Bestandsaufnahme die endgültige Liste der
+relevanten nativen Dienste und Timer festlegen.
+
+**TODO:** Für jeden Dienst festlegen, welche Zustände erwartet, informativ,
+warnungswürdig oder fehlerhaft sind. Insbesondere darf ein erwarteter inaktiver
+Oneshot-Service nicht pauschal als Fehler gelten.
+
+### 10.5 Docker und Container
+
+Der Zustand von Docker selbst wird separat geprüft. Darunter werden die für Nova
+relevanten Container mit ihrem tatsächlichen Zustand aufgelistet.
+
+Dabei gelten folgende Anforderungen:
+
+- Auch gestoppte Container werden angezeigt.
+- `stopped` beziehungsweise `exited` ist nicht automatisch ein Fehler, da
+  Container abhängig von ihrer Funktion absichtlich gestoppt sein dürfen.
+- Insbesondere kann bei der späteren Prusa-Integration ein gestoppter Upload- oder
+  Kamera-Container bei ausgeschaltetem Drucker dem gewünschten Zustand
+  entsprechen.
+- Laufende Container zeigen möglichst ihre Laufzeit.
+- Bei gestoppten Containern werden nach Möglichkeit der tatsächliche Status und
+  ein sinnvoller Zeitpunkt beziehungsweise die Dauer seit der Beendigung
+  angezeigt.
+- Zustände wie `unhealthy`, `dead` oder dauerhaftes `restarting` müssen deutlich
+  als problematisch erkennbar sein.
+- Wenn Docker selbst nicht läuft, darf die Container-Abfrage das MOTD nicht
+  abbrechen.
+
+Die Containerliste wird bis zum Abschluss der Nova-Bestandsaufnahme nicht auf
+eine heute fest kodierte Liste beschränkt. Nach aktuellem Stand sind unter anderem
+Vaultwarden, Caddy und später die Prusa-Komponenten relevant.
+
+**TODO:** Nach Abschluss der Nova-Bestandsaufnahme festlegen, ob und wie die
+relevanten Container dynamisch ausgewählt oder vollständig aufgelistet werden.
+
+### 10.6 Verhalten und Robustheit
+
+Das MOTD muss:
+
+- schnell sein und den SSH-Login nicht merklich verzögern
+- ausschließlich Statusinformationen lesen
+- keine Reparaturen oder Änderungen durchführen
+- keine Dienste starten oder stoppen
+- keine Container starten oder stoppen
+- keine langsamen externen Internetabfragen durchführen
+- bei einem fehlgeschlagenen einzelnen Check die übrigen Informationen weiterhin
+  anzeigen
+- keine Secrets, Tokens, Private Keys oder sensitiven Konfigurationswerte
+  ausgeben
+- auch bei einem teilweise defekten System möglichst eine brauchbare
+  Diagnoseübersicht liefern
+
+Das MOTD selbst darf niemals dazu führen, dass ein SSH-Login fehlschlägt.
+
+### 10.7 Darstellung
+
+Die spätere Implementierung darf Farben verwenden, wenn das Terminal sie
+unterstützt, muss aber auch ohne Farben verständlich bleiben. Ziel ist ungefähr
+folgende Informationsdichte; das endgültige Layout darf verbessert werden:
+
+```text
+NOVA — Infrastructure Node
+Raspberry Pi / Debian / ARM64
+
+Uptime | Temperature | Disk | Load
+
+Services
+AdGuard | Unbound | WireGuard | Syncthing | DynDNS | Backup Timer | ...
+
+Containers
+Containername | Status | Laufzeit
+```
+
+### 10.8 Spätere Implementierung
+
+Als wahrscheinlicher Zielort ist `/etc/update-motd.d/10-nova-status` vorgesehen.
+Die endgültige Implementierung erfolgt jedoch erst nach Abschluss der gesamten
+Nova-Bestandsaufnahme, damit die Dienst- und Containerliste vollständig bestimmt
+werden kann. Bis dahin wird kein MOTD-Skript erstellt.
 
 **TODO:** Bestehende MOTD-Skripte, Ausgabe, Pfade und Statuslogik vom produktiven
-Nova auslesen.
-
-**TODO:** Für jeden Dienst festlegen, was die Zustände „gesund“, „gestört“ und
-„nicht verfügbar“ konkret bedeuten.
+Nova als mögliche Referenz beziehungsweise Fallback auslesen.
 
 ## 11. Secrets und Repository-Regeln
 
@@ -652,6 +775,7 @@ rein lesende Bestandsaufnahme am produktiven Nova geklärt werden. Dabei gilt:
 
 | Datum | Änderung |
 | --- | --- |
+| 2026-08-09 | Anforderungen an das zukünftige dynamische Nova-MOTD ergänzt |
 | 2026-08-09 | Syncthing-Bestandsaufnahme und Sollzustand für die nachgelagerte Vaultwarden-Backup-Replikation ergänzt |
 | 2026-08-09 | DynDNS-Bestandsaufnahme einschließlich Secret-, WireGuard- und Healthcheck-Anforderungen ergänzt |
 | 2026-08-09 | Bestandsaufnahme von WireGuard und PiVPN einschließlich MTU-, Client- und Firewall-Strategie ergänzt |
