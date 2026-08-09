@@ -349,20 +349,122 @@ darf dabei nicht als Fehler gewertet werden.
 
 ## 7. Vaultwarden
 
-- Vaultwarden läuft in Docker.
-- Der Stack besteht aus Vaultwarden und Caddy.
-- Der bestehende Vaultwarden-Appliance-Installer soll später als Grundlage dienen.
-- Vaultwarden-Daten werden separat per Backup und Restore wiederhergestellt.
-- Secrets, Zertifikats-Secrets und Zugangsdaten dürfen nicht im Repository liegen.
+### 7.1 Maßgebliche Implementierung
 
-**TODO:** Bestehenden Appliance-Installer, verwendete Images und Versionen,
-Container-Konfiguration, Volumes, Netzwerke, Ports und Caddy-Konfiguration erfassen.
+Vaultwarden wird in `nova-infra` nicht neu implementiert. Die bereits fertig
+entwickelte `vaultwarden-appliance` ist die maßgebliche Implementierung und wird
+1:1 verwendet. Sie wird weder dupliziert noch als Copy-and-Paste-Fork in dieses
+Repository übernommen.
 
-**TODO:** Erforderliche externe Secrets und Zertifikate inventarisieren und ihren
-sicheren Bereitstellungsweg definieren.
+Die Zuständigkeit der Appliance umfasst insbesondere:
 
-**TODO:** Aktuellen Backup- und Restore-Ablauf einschließlich Datenpfaden und
-Konsistenzanforderungen vom produktiven System auslesen und dokumentieren.
+- Vaultwarden
+- Docker- und Compose-Konfiguration
+- Caddy
+- lokale HTTPS- und CA-Architektur
+- `vwctl`
+- Backup-Implementierung
+- Backup-Validierung
+- lokale Backup-Retention
+- USB-Unterstützung
+- systemd Backup-Service und Timer
+- Status- und Restore-Funktionen der Appliance
+- alle dort bereits implementierten Sicherheits- und Validierungsmechanismen
+
+`nova-infra` darf diese Funktionen nicht parallel neu implementieren.
+
+### 7.2 Installation und Orchestrierung
+
+Der spätere `nova-infra`-Installer verwendet den vorhandenen curl-basierten
+Installer des Projekts `vaultwarden-appliance`:
+
+```text
+nova-infra
+  -> bestehender curl-Installer von vaultwarden-appliance
+  -> vollständig installierte Vaultwarden-Appliance auf Nova
+```
+
+`nova-infra` übernimmt dabei ausschließlich die Orchestrierung. Die genaue URL
+und der konkrete Aufruf werden bei der späteren Implementierung aus dem
+bestehenden Projekt übernommen und nicht neu erfunden.
+
+**TODO:** Bei der späteren Implementierung die maßgebliche Installer-URL und den
+konkreten Aufruf direkt aus `vaultwarden-appliance` übernehmen.
+
+### 7.3 Datenpfade
+
+Die von der Vaultwarden-Appliance definierten Pfade bleiben unverändert
+maßgeblich:
+
+- Live-Daten: `/opt/vaultwarden/data`
+- lokale Backups: `/opt/vaultwarden/backups`
+
+Die Backup-Architektur der Appliance wird durch `nova-infra` nicht verändert.
+
+### 7.4 Disaster Recovery
+
+Nach einer vollständigen Neuinstallation von Nova sind für Vaultwarden bewusst
+einmalige manuelle Restore-Schritte vorgesehen. Manuell wiederhergestellt werden
+insbesondere:
+
+- bestehende Vaultwarden-Daten
+- benötigte Caddy-Zertifikats- und CA-Daten, damit die bestehende lokale
+  Vertrauenskette erhalten werden kann
+
+Dieser manuelle Import ist akzeptiert und wird nicht zwanghaft vollständig
+automatisiert. Der Infrastrukturaufbau soll automatisiert sein; das Einspielen
+der sensitiven produktiven Daten darf ein klar dokumentierter manueller Schritt
+bleiben. Ein vollständig unbeaufsichtigter Restore aller Secrets und Nutzdaten
+ist ausdrücklich nicht das Ziel.
+
+Secrets, private Schlüssel, CA-Private-Key-Material und produktive
+Vaultwarden-Daten dürfen niemals im Git-Repository von `nova-infra` gespeichert
+werden.
+
+**TODO:** Den einmaligen manuellen Restore-Ablauf anhand der vorhandenen
+Appliance-Funktionen dokumentieren, ohne geheime oder produktive Daten in das
+Repository zu übernehmen.
+
+### 7.5 Caddy-Integration
+
+Caddy wird, soweit es Bestandteil der Vaultwarden-Appliance ist, aus der
+bestehenden Appliance übernommen. Für Vaultwarden wird keine zweite unabhängige
+Caddy-Installation entwickelt.
+
+Falls Nova Caddy zusätzlich als Reverse Proxy für weitere lokale Dienste nutzt,
+baut die spätere Nova-Integration auf der bestehenden Caddy-Installation auf und
+ergänzt diese gezielt, statt einen zweiten Caddy zu installieren. Dabei müssen die
+bestehenden lokalen DNS-Rewrites berücksichtigt werden, die bewusst auf Novas
+LAN-Adresse `192.168.0.195` zeigen.
+
+**TODO:** Nach vollständiger Inventur der lokalen Dienste und DNS-Rewrites
+festlegen, welche zusätzlichen Reverse-Proxy-Routen die bestehende
+Caddy-Installation benötigt.
+
+### 7.6 Backup und Syncthing
+
+Die Vaultwarden-Appliance erstellt weiterhin selbstständig ihre validierten
+lokalen Backups unter `/opt/vaultwarden/backups`. Syncthing wird von `nova-infra`
+lediglich als nachgelagerte, unabhängige Replikation dieses Verzeichnisses zu
+`Diskstation3` eingerichtet. Die Vaultwarden-Appliance wird dafür nicht verändert.
+
+```text
+Vaultwarden
+  -> vwctl backup
+  -> /opt/vaultwarden/backups
+  -> Syncthing (sendonly)
+  -> Diskstation3
+```
+
+### 7.7 Abgrenzung der Projekte
+
+| Projekt | Verantwortung |
+| --- | --- |
+| `vaultwarden-appliance` | Vaultwarden, Caddy innerhalb der Appliance, `vwctl`, Backup, Restore und Appliance-Funktionalität |
+| `nova-infra` | Gesamter Nova Infrastructure Node sowie Installation und Integration der fertigen Appliance in DNS, Syncthing, MOTD und die übrige Nova-Infrastruktur |
+
+Die Schnittstelle zwischen beiden Projekten bleibt eine Orchestrierung der
+fertigen Appliance; deren Implementierung wird nicht nach `nova-infra` kopiert.
 
 ## 8. Syncthing und Backups
 
@@ -863,6 +965,7 @@ rein lesende Bestandsaufnahme am produktiven Nova geklärt werden. Dabei gilt:
 
 | Datum | Änderung |
 | --- | --- |
+| 2026-08-09 | Verbindliche Integrations- und Projektabgrenzungsstrategie für die Vaultwarden-Appliance ergänzt |
 | 2026-08-09 | Verbindlichen Sollzustand für Prusa-Kamera-Upload und Watchdog dokumentiert |
 | 2026-08-09 | Anforderungen an das zukünftige dynamische Nova-MOTD ergänzt |
 | 2026-08-09 | Syncthing-Bestandsaufnahme und Sollzustand für die nachgelagerte Vaultwarden-Backup-Replikation ergänzt |
