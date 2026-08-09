@@ -43,19 +43,185 @@ Sie legt noch keine konkrete Implementierung fest.
 | Architektur | ARM64 |
 | Betriebssystem | Debian 13 (trixie) |
 | Systemdatenträger | SSD |
-| Remote-Zugriff | SSH |
-| Container-Laufzeit | Docker |
-| Container-Orchestrierung | Docker Compose |
+| Zielbenutzer | `admin` mit UID/GID 1000 und Home `/home/admin` |
+| Remote-Zugriff | SSH als `admin` |
+| Zeitzone | `Europe/Zurich` |
+| Locale | `en_GB.UTF-8` |
+| Netzwerkmanager | NetworkManager |
+| Hauptinterface | `eth0` |
+| Container-Laufzeit | Docker Engine aus dem offiziellen Docker-Repository |
+| Container-Orchestrierung | Docker Compose Plugin |
 | Systemdienste | systemd Services und Timer |
 | Anmeldung | MOTD mit Statusübersicht |
 
-### Noch vom produktiven Nova zu erfassen
+### 3.1 Benutzer und sudo
 
-- **TODO:** Aktuelle Partitionierung, Dateisysteme und Mountpoints der SSD auslesen.
-- **TODO:** Aktuelle SSH-Konfiguration und erforderliche Härtungseinstellungen auslesen.
-- **TODO:** Relevante Benutzer, Gruppen, Berechtigungen und Verzeichnisbesitzer auslesen.
-- **TODO:** Bestehende systemd Services und Timer einschließlich Abhängigkeiten auslesen.
-- **TODO:** Erforderliche Debian-Pakete und ihre Konfiguration erfassen.
+Der produktive Zielbenutzer ist `admin`:
+
+- UID/GID: 1000
+- Home: `/home/admin`
+- Shell: `/bin/bash`
+- Mitglied der benötigten Systemgruppen, insbesondere `sudo` und `docker`
+- passwortloser sudo-Zugriff
+
+Der spätere Installer geht von einem frisch installierten Debian-13-System aus
+und stellt sicher, dass `admin` mit diesem Home und dieser Shell vorhanden ist,
+Mitglied der für Nova benötigten Gruppen wird und sudo-Zugriff besitzt. Docker
+muss nach der Installation ohne unnötige Workarounds durch `admin` verwendbar
+sein. Der bestehende passwortlose sudo-Zugriff wird als Sollzustand übernommen.
+
+Benutzerpasswörter dürfen weder im Repository gespeichert noch vom Installer
+erzeugt werden.
+
+### 3.2 SSH
+
+Der SSH-Service ist auf dem produktiven Nova aktiviert und bleibt verbindlicher
+Bestandteil des Sollzustands:
+
+- Die Anmeldung als `admin` muss möglich sein.
+- Key-basierter SSH-Zugriff muss funktionieren.
+- Root-Login wird für den normalen Betrieb nicht benötigt.
+- Es wird keine unnötig komplexe SSH-Hardening-Konfiguration eingeführt.
+- Die bestehenden Debian-/OpenSSH-Defaults werden bevorzugt, solange sie für den
+  vorgesehenen Betrieb geeignet sind.
+- Der Installer darf SSH nicht versehentlich unzugänglich machen.
+
+Private SSH-Schlüssel dürfen niemals im Repository gespeichert werden.
+
+### 3.3 Zeit und Locale
+
+Der verbindliche Sollzustand lautet:
+
+- Zeitzone: `Europe/Zurich`
+- Locale: `en_GB.UTF-8`
+- NTP- beziehungsweise Systemzeitsynchronisation: aktiv
+
+Die Systemzeit wird auf dem produktiven Nova erfolgreich synchronisiert.
+
+### 3.4 Netzwerk
+
+NetworkManager ist aktiviert und bleibt der Netzwerkmanager. Das produktive
+Hauptinterface ist `eth0`. Die Basiskonfiguration muss zu folgenden bereits
+dokumentierten Werten passen:
+
+- Nova LAN-Adresse: `192.168.0.195/24`
+- Gateway: `192.168.0.1`
+
+Die genaue Methode der statischen beziehungsweise reservierten Adressvergabe wird
+bei der Installer-Implementierung anhand des Testsystems festgelegt. Docker-,
+WireGuard- und temporäre virtuelle Interfaces dürfen nicht als statische
+Basiskonfiguration übernommen werden. `wlan0` wird für den normalen Nova-Betrieb
+nicht benötigt.
+
+**TODO (Atlas):** Die reproduzierbare Methode der Adressvergabe mit
+NetworkManager auf dem Testsystem festlegen und validieren.
+
+### 3.5 Automatische Updates
+
+Auf dem produktiven Nova ist `unattended-upgrades` installiert und
+`apt-daily-upgrade.timer` aktiviert. Für den Sollzustand gilt:
+
+- `unattended-upgrades` ist installiert und aktiviert.
+- Die systemeigenen APT-Timer dürfen verwendet werden.
+- Es wird keine parallele eigene Update-Automatik entwickelt, solange Debian
+  diese Aufgabe zuverlässig übernimmt.
+
+### 3.6 Docker
+
+Der aktuelle produktive Stand ist:
+
+- Docker Engine 29.7.2
+- Docker Compose v5.4.0
+- `docker-ce`
+- `docker-ce-cli`
+- `containerd.io`
+- `docker-compose-plugin`
+
+Docker wird aus dem offiziellen Docker-APT-Repository installiert:
+
+```text
+https://download.docker.com/linux/debian
+```
+
+Der spätere Installer muss:
+
+- das offizielle Docker-Repository reproduzierbar einrichten
+- den offiziellen Repository-Keyring verwenden
+- Docker Engine und Docker CLI installieren
+- `containerd.io` installieren
+- das Docker Compose Plugin installieren
+- `admin` in die Gruppe `docker` aufnehmen
+- den Docker-Service aktivieren
+- vermeiden, auf eine möglicherweise ältere Docker-Version aus den
+  Debian-Standardpaketen zurückzufallen
+
+Die aktuell installierten Versionsnummern werden nicht fest gepinnt, sofern die
+`vaultwarden-appliance` keine konkrete Version verlangt. Ziel ist der jeweils
+aktuelle stabile Stand aus dem offiziellen Docker-Repository für Debian 13.
+
+### 3.7 Syncthing-Repository
+
+Der bereits dokumentierte Syncthing-Sollzustand wird bestätigt. Der aktuelle
+produktive Stand lautet:
+
+- Syncthing 2.1.3
+- offizielles Repository: `https://apt.syncthing.net/`
+- Channel: `syncthing stable-v2`
+- Keyring: `/etc/apt/keyrings/syncthing-archive-keyring.gpg`
+
+Der spätere Installer richtet dieses offizielle Repository und dessen Keyring
+reproduzierbar ein. Er darf nicht auf die möglicherweise ältere Version aus
+Debian `trixie/main` zurückfallen.
+
+### 3.8 Grundpakete
+
+Nach aktuellem Stand werden mindestens folgende Basiswerkzeuge benötigt:
+
+- `ca-certificates`
+- `curl`
+- `git`
+- `gnupg`
+- `jq`
+- `rsync`
+- `unattended-upgrades`
+- `wireguard-tools`
+
+`nftables` ist aktuell installiert, wird beim Neuaufbau jedoch nur verwendet,
+wenn es für die tatsächliche Nova-Konfiguration benötigt wird. Eine zusätzliche
+restriktive nftables-Firewall wird nicht allein aus Prinzip eingeführt.
+
+Weitere Pakete dürfen später ergänzt werden, wenn ein dokumentierter Dienst sie
+tatsächlich benötigt.
+
+### 3.9 `/opt`-Verzeichnisstruktur
+
+Der aktuell produktive `/opt`-Baum enthält unter anderem:
+
+- `/opt/AdGuardHome`
+- `/opt/backups`
+- `/opt/vaultwarden`
+
+Der alte produktive Vaultwarden-Baum dient nur als Referenz und wird nicht 1:1
+übernommen. Für Vaultwarden bleibt die `vaultwarden-appliance` maßgeblich. Die
+endgültige `/opt`-Struktur entsteht aus den jeweiligen Dienst-Spezifikationen und
+wird nicht blind vom alten Nova kopiert.
+
+### 3.10 Bootstrap-Grundsatz
+
+Der spätere Bootstrap geht von einem möglichst sauberen Debian-13-System aus. Er
+stellt alle zusätzlich benötigten Pakete, APT-Repositories, Keyrings, Dienste und
+Verzeichnisse selbst reproduzierbar her.
+
+Der vorgesehene Ausgangszustand von Atlas ist:
+
+- frisches Debian 13
+- vollständig aktualisiertes System
+- vorhandener SSH-Zugriff
+- ansonsten möglichst keine vorausgesetzte Spezialkonfiguration
+
+**TODO:** Aktuelle Partitionierung, Dateisysteme und Mountpoints der produktiven
+SSD nur dann ergänzend erfassen, wenn sie für den reproduzierbaren Bootstrap oder
+die späteren Restore-Abläufe relevant sind.
 
 ## 4. DNS
 
@@ -1144,7 +1310,8 @@ unnötig komplexes Secret-Management-System einzuführen.
 - **Atlas** wird aus der produktiven DNS-Infrastruktur entfernt und dient künftig
   ausschließlich als Testserver.
 - Atlas erhält als Ausgangspunkt ein möglichst leeres Debian-13-System, im
-  Wesentlichen ein frisches Debian 13 nach `apt update` und Upgrade.
+  Wesentlichen ein frisches Debian 13 nach `apt update` und Upgrade, mit
+  vorhandenem SSH-Zugriff und ohne weitere vorausgesetzte Spezialkonfiguration.
 - Sämtliche destruktiven Installations- und Wiederherstellungstests werden
   ausschließlich auf Atlas durchgeführt.
 
@@ -1197,6 +1364,7 @@ rein lesende Bestandsaufnahme am produktiven Nova geklärt werden. Dabei gilt:
 
 | Datum | Änderung |
 | --- | --- |
+| 2026-08-09 | Bestandsaufnahme des Nova-Basissystems und verbindliche Bootstrap-Anforderungen ergänzt |
 | 2026-08-09 | Secret- und Disaster-Recovery-Konzept einschließlich lokaler Installer-Secrets und dateibasierter Restore-Daten ergänzt |
 | 2026-08-09 | Produktive Caddy-Zuordnungen und Architektur der gemeinsamen lokalen HTTPS-Instanz dokumentiert |
 | 2026-08-09 | Verbindliche Integrations- und Projektabgrenzungsstrategie für die Vaultwarden-Appliance ergänzt |
