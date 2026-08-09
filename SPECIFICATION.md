@@ -507,34 +507,122 @@ Vaultwarden-Backup-Erstellung gewertet werden.
 
 ## 9. 3D-Drucker und Kamera-Upload
 
-### 9.1 Drucker und Upload
+### 9.1 Drucker
 
-- Prusa-Drucker-IP: `192.168.0.61`
-- Der Kamera-Upload läuft über das Docker-Image
-  `jtee3d/prusa_connect_rtsp`.
-- Das Prusa-Connect-Token darf nicht im Repository gespeichert werden.
-- MediaMTX wird im neuen System nicht migriert.
+Der Prusa-3D-Drucker ist unter der festen privaten LAN-Adresse `192.168.0.61`
+erreichbar. Diese private IP-Adresse ist kein Secret, darf im Repository
+dokumentiert und später fest in der Konfiguration verwendet werden.
 
-**TODO:** Aktuell verwendete Image-Version, Container-Parameter, Kameraquelle,
-Netzwerkmodus, Volumes und sonstige Laufzeitabhängigkeiten auslesen.
+### 9.2 Kamera-Upload zu Prusa Connect
 
-**TODO:** Sicheren Bereitstellungsweg für das Prusa-Connect-Token festlegen.
+Der Kamera-Upload wird direkt über das bestehende Docker-Image
+`jtee3d/prusa_connect_rtsp` realisiert. Es wird keine eigene Upload-Anwendung
+entwickelt.
 
-### 9.2 Watchdog
+Zu den sensitiven Werten gehören insbesondere:
 
-- Ein zusätzlicher eigener Watchdog-Container steuert den Upload-Container.
-- Der Watchdog prüft die Drucker-IP alle 30 Sekunden.
-- Ist der Drucker online, wird der Upload-Container gestartet.
-- Ist der Drucker offline, wird der Upload-Container gestoppt.
-- Der Watchdog benötigt Zugriff auf `/var/run/docker.sock`.
+- die Kamera-URL, falls sie Zugangsdaten enthält
+- das Prusa-Connect-Token
 
-**TODO:** Exakte Online-Prüfung, Timeout-, Retry- und Fehlerbehandlung sowie den
-aktuellen Namen des Upload-Containers vom produktiven Nova auslesen.
+Das Prusa-Connect-Token und andere sensitive Werte dürfen niemals im
+Git-Repository gespeichert werden. Sie werden später über eine lokale `.env`-Datei
+oder eine vergleichbare Secret-Konfiguration außerhalb des Repositories
+bereitgestellt. Eine `.env.example` ohne Secrets darf bei der späteren
+Implementierung ins Repository aufgenommen werden.
 
-> Sicherheitshinweis: Der Zugriff auf den Docker-Socket verleiht dem Watchdog
-> weitreichende Kontrolle über den Host. Die spätere Implementierung muss diesen
-> Zugriff ausdrücklich dokumentieren und auf den erforderlichen Umfang begrenzen,
-> soweit dies technisch möglich ist.
+**TODO:** Bei der späteren Implementierung Image-Version, Container-Parameter,
+Kameraquelle, Netzwerkmodus und die konkrete lokale Secret-Einbindung festlegen.
+
+### 9.3 Ausschluss von MediaMTX
+
+Der aktuell auf Nova vorhandene native `mediamtx.service` wird nicht migriert.
+MediaMTX ist Altbestand und entfällt beim Neuaufbau vollständig, weil
+`jtee3d/prusa_connect_rtsp` direkt mit der Kameraquelle arbeiten kann. Der spätere
+Installer darf MediaMTX nicht installieren.
+
+### 9.4 Watchdog / Prusa Monitor
+
+Zusätzlich zum Upload-Container wird ein eigener kleiner Watchdog-Container
+benötigt. Der Kamera-Upload über `prusa_connect_rtsp` kann nach längerer Laufzeit
+beziehungsweise längeren Drucker-Off-Zeiten unzuverlässig werden. Die bewährte
+Lösung startet und stoppt den Upload-Container deshalb gezielt abhängig von der
+Erreichbarkeit des Druckers.
+
+Die verbindliche Logik lautet:
+
+- Der Watchdog prüft `192.168.0.61` alle 30 Sekunden per Ping.
+- Ist der Drucker erreichbar, prüft der Watchdog, ob der Upload-Container läuft,
+  und startet ihn andernfalls.
+- Ist der Drucker nicht erreichbar, prüft der Watchdog, ob der Upload-Container
+  läuft, und stoppt ihn gegebenenfalls.
+- Die Logik bleibt funktional einfach und wird nicht unnötig erweitert.
+
+Die bisherige Synology-/Portainer-Lösung verwendete einen Alpine-Container und
+installierte `iputils` und `docker-cli` bei jedem Start. Für Nova wird stattdessen
+bevorzugt ein kleines reproduzierbares eigenes Watchdog-Image verwendet, das die
+benötigten Werkzeuge bereits enthält. Die Watchdog-Logik selbst bleibt möglichst
+einfach.
+
+### 9.5 Docker-Zugriff
+
+Der Watchdog benötigt Zugriff auf `/var/run/docker.sock`, um den Upload-Container
+starten und stoppen zu können. Dieser Zugriff verleiht weitreichende Rechte auf
+dem Host. Das Risiko ist bekannt und wird für diesen kontrollierten eigenen
+Watchdog bewusst akzeptiert.
+
+### 9.6 Keine zusätzlichen Docker-Healthchecks
+
+`nova-infra` ergänzt weder für den Prusa-Watchdog noch für den
+Prusa-Upload-Container eigene Docker-Healthchecks.
+
+Begründung:
+
+- Zusätzliche Healthchecks sind für diesen Anwendungsfall nicht erforderlich.
+- Sie würden die Lösung unnötig komplexer und fehleranfälliger machen.
+- Der tatsächliche Docker-Status reicht für die Betriebsübersicht aus.
+- Der Upload-Container darf absichtlich gestoppt sein, wenn der Drucker
+  ausgeschaltet ist.
+
+Zulässige Zustände sind beispielsweise:
+
+- `prusa-monitor` läuft dauerhaft.
+- `prusa-upload` läuft, wenn der Drucker erreichbar ist.
+- `prusa-upload` ist `stopped` oder `exited`, wenn der Drucker ausgeschaltet ist.
+
+`stopped` oder `exited` beim Upload-Container ist ausdrücklich nicht automatisch
+ein Fehler. Dafür wird keine zusätzliche automatische Bewertung implementiert.
+Besitzt ein verwendetes Fremd-Image bereits einen eigenen eingebauten
+Healthcheck, darf dessen Docker-Status angezeigt werden; `nova-infra` fügt jedoch
+keinen weiteren eigenen Container-Healthcheck hinzu.
+
+### 9.7 MOTD-Integration
+
+Das spätere Nova-MOTD zeigt die Prusa-Container wie die übrigen relevanten
+Container an:
+
+- Containername
+- tatsächlicher Docker-Zustand
+- Laufzeit bei laufenden Containern
+- auch gestoppte Container
+
+Das MOTD beobachtet ausschließlich und darf niemals Container starten, stoppen
+oder reparieren. Die Start-/Stop-Logik für den Upload-Container gehört
+ausschließlich zum Prusa-Watchdog.
+
+### 9.8 Spätere Docker-Struktur
+
+Konzeptionell werden mindestens zwei Komponenten benötigt:
+
+- `jtee3d/prusa_connect_rtsp`
+- ein eigener `prusa-monitor`-Watchdog
+
+MediaMTX gehört ausdrücklich nicht dazu. Die konkrete Compose- und
+Verzeichnisstruktur wird erst bei der späteren Implementierung festgelegt.
+
+Für die Docker-Dienste auf Nova gilt grundsätzlich: Status soll sichtbar sein,
+ohne unnötige zusätzliche Monitoring- oder Healthcheck-Logik einzubauen.
+Einfachheit und robuste reproduzierbare Funktion haben Vorrang vor zusätzlicher
+Überwachung.
 
 ## 10. MOTD und Statusübersicht
 
@@ -775,6 +863,7 @@ rein lesende Bestandsaufnahme am produktiven Nova geklärt werden. Dabei gilt:
 
 | Datum | Änderung |
 | --- | --- |
+| 2026-08-09 | Verbindlichen Sollzustand für Prusa-Kamera-Upload und Watchdog dokumentiert |
 | 2026-08-09 | Anforderungen an das zukünftige dynamische Nova-MOTD ergänzt |
 | 2026-08-09 | Syncthing-Bestandsaufnahme und Sollzustand für die nachgelagerte Vaultwarden-Backup-Replikation ergänzt |
 | 2026-08-09 | DynDNS-Bestandsaufnahme einschließlich Secret-, WireGuard- und Healthcheck-Anforderungen ergänzt |
