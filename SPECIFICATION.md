@@ -3,15 +3,20 @@
 ## 1. Zweck und Zielbild
 
 Dieses Repository beschreibt die spätere, vollständig reproduzierbare Installation
-des Infrastruktur-Nodes **Nova** auf einem Raspberry Pi 5 mit Debian 13.
+des Infrastruktur-Nodes **Nova** auf einem Raspberry Pi 5 ausgehend von einer
+frischen Raspberry-Pi-OS-/Debian-13-Basis.
 
 Langfristiges Ziel ist folgender Ablauf:
 
-1. Ein frisches und vollständig aktualisiertes Debian 13 bereitstellen.
-2. Die Installation über einen einzigen `curl`-Aufruf starten.
-3. Den vollständigen, in diesem Dokument beschriebenen Nova-Sollzustand herstellen.
-4. Secrets und gesicherte Anwendungsdaten separat einspielen.
-5. Den Zustand und die zentralen Funktionen durch Healthchecks verifizieren.
+1. Eine frische und vollständig aktualisierte
+   Raspberry-Pi-OS-/Debian-13-Basis bereitstellen.
+2. Optional das Recovery-Medium `NOVA-RECOVERY` anschließen.
+3. Die Installation über einen einzigen `curl`-Aufruf starten.
+4. Den vollständigen, in diesem Dokument beschriebenen Nova-Sollzustand
+   herstellen; fehlende optionale Secrets verhindern den Grundaufbau nicht.
+5. Geschützte Anwendungsdaten bei Bedarf in den dokumentierten manuellen
+   Restore-Schritten wiederherstellen.
+6. Den Zustand durch Abschlussprüfung und Reboot-Test verifizieren.
 
 Diese Datei dokumentiert zunächst ausschließlich den bisher bekannten Sollzustand.
 Sie legt noch keine konkrete Implementierung fest.
@@ -34,6 +39,22 @@ Sie legt noch keine konkrete Implementierung fest.
 - Migration von MediaMTX
 - Ablage von Secrets oder Zugangsdaten im Repository
 - Veränderungen am produktiven Referenzsystem Nova während der Entwicklung
+
+### Architektur- und Wartungsgrundsätze
+
+- Einfache, verständliche Standardkomponenten haben Vorrang vor technisch
+  eleganten, aber schwer wartbaren Abstraktionen.
+- Der Eigentümer muss das System auch nach längerer Zeit ohne Beschäftigung mit
+  Nova verstehen und wiederherstellen können.
+- Unnötige Abhängigkeiten zwischen Diensten werden vermieden. Der Ausfall einer
+  Komfort- oder Speicherfunktion darf kritische Infrastruktur nicht mitreißen.
+- Ein Neuaufbau anhand einer bekannten Spezifikation wird der Reparatur einer
+  undurchsichtigen, historisch gewachsenen Installation vorgezogen.
+- Git enthält reproduzierbare Konfiguration und Code. Das Recovery-Medium enthält
+  ausschließlich nicht versionierbare Secrets und geschützte Restore-Daten.
+- Codex ist ein Werkzeug zur Umsetzung der dokumentierten Architektur, nicht der
+  Entscheidungsträger. Nicht ausdrücklich genehmigte architektonische
+  Substitutionen sind unzulässig.
 
 ## 3. Zielplattform und Basissystem
 
@@ -248,6 +269,16 @@ Atlas-Einträge werden entfernt.
 Resolver-, Cache- und DNSSEC-Aufgaben liegen bei Unbound. Die DNS-Funktion muss
 später durch Healthchecks geprüft werden.
 
+AdGuard Home wird beim Neuaufbau erst nahe dem Ende installiert und konfiguriert.
+Unbound muss zuvor auf Port 5335 unabhängig getestet sein, und alle benötigten
+APT-Downloads sowie Docker-Pulls müssen abgeschlossen sein. Dadurch bleibt die
+bestehende DNS-Funktion bis zum bewusst ausgeführten finalen DNS-Umschalten
+unangetastet.
+
+Der bestehende Web-UI-Zugang wird über `ADGUARD_PASSWORD_HASH` aus dem
+Recovery-Secret wiederhergestellt. Ein Klartextpasswort wird weder benötigt noch
+gespeichert.
+
 #### 4.1.2 Upstreams, Fallback und Bootstrap
 
 Der zukünftige produktive AdGuard verwendet genau zwei reguläre interne
@@ -280,6 +311,10 @@ Davon unabhängig dürfen die bestehenden `bootstrap_dns` beibehalten werden:
 - `149.112.112.10`
 
 #### 4.1.3 Lokale DNS-Rewrites und Caddy
+
+Lokale DNS-Rewrites werden getrennt von der kritischen DNS-Resolver-Funktion
+dokumentiert und umgesetzt. Sie sind für interne Namen und HTTPS-Komfort relevant,
+aber nicht Voraussetzung für die grundlegende externe DNS-Auflösung.
 
 Folgende Rewrites werden übernommen:
 
@@ -414,6 +449,11 @@ AdGuard Home übernimmt dabei Filterung und Protection. Die Resolver-Funktion
 einschließlich DNSSEC-Verarbeitung, Cache und eigentlicher Auflösung liegt bei den
 Unbound-Instanzen.
 
+Unbound wird vor AdGuard eingerichtet und unabhängig auf Port 5335 validiert.
+AdGuard übernimmt Port 53 erst in der späten DNS-Phase des Neuaufbaus. Der
+kritische DNS-Wechsel darf nicht vor Abschluss aller Paketdownloads und
+Container-Pulls stattfinden.
+
 **TODO:** Konkrete DNS-Healthchecks und erwartete Antworten anhand des produktiven
 Systems festlegen.
 
@@ -545,14 +585,20 @@ Diese URL enthält ein geheimes Update-Token und darf daher nicht unverändert
 
 - Die echte FreeDNS-Update-URL beziehungsweise das Token darf nicht im Repository
   gespeichert werden.
+- FreeDNS wird mit dem vollständigen Wert von `DYNDNS_URL` aufgerufen.
+- `DYNDNS_URL` stammt bevorzugt aus `/secrets/secrets.env` auf dem Recovery-Medium
+  mit dem Dateisystem-Label `NOVA-RECOVERY` und wird für die Installation sicher
+  lokal bereitgestellt.
 - Die nicht geheime Skriptlogik darf später im Repository gespeichert werden.
 - Das Secret wird zur Laufzeit aus einer separaten lokalen, nur für `root`
   lesbaren Konfigurations- oder Environment-Datei geladen.
 - Eine Beispiel- oder Template-Datei ohne Secret darf im Repository gespeichert
   werden.
 
-**TODO:** Die genaue technische Umsetzung der lokalen Secret-Datei und ihrer
-Einbindung beim späteren Installer festlegen.
+Fehlt `DYNDNS_URL`, wird der Platzhalter `CHANGE_ME_DYNDNS_URL` verwendet und
+DynDNS bleibt deaktiviert beziehungsweise meldet klar, dass eine manuelle
+Vervollständigung erforderlich ist. Der Platzhalter darf niemals als Update-URL
+ausgeführt werden.
 
 ### 6.4 Abhängigkeit zu WireGuard
 
@@ -597,6 +643,9 @@ Die Zuständigkeit der Appliance umfasst insbesondere:
 - alle dort bereits implementierten Sicherheits- und Validierungsmechanismen
 
 `nova-infra` darf diese Funktionen nicht parallel neu implementieren.
+Vaultwarden bleibt dabei soweit praktisch logisch von der allgemeinen
+Nova-Infrastruktur getrennt. Die Kerninstallation muss unabhängig verständlich
+und wiederherstellbar bleiben.
 
 ### 7.2 Installation und Orchestrierung
 
@@ -659,10 +708,21 @@ HTTPS-Reverse-Proxy. Diese Instanz wird zuerst durch den bestehenden Installer v
 `vaultwarden-appliance` installiert. `nova-infra` installiert keine zweite
 Caddy-Instanz.
 
+Vaultwarden ist der primäre Grund für Caddy und dessen interne Root-CA. Der
+Nova-Installer darf eine vorhandene Caddy-Konfiguration niemals blind
+überschreiben.
+
 Nach erfolgreicher Installation der Vaultwarden-Appliance ergänzt `nova-infra`
 die zusätzlich für Nova benötigten lokalen Reverse-Proxy-Einträge
 reproduzierbar, ohne die vorhandene Caddy-Konfiguration der Appliance zu
 beschädigen.
+
+Eine einzelne, verständliche Caddyfile-Konfiguration wird bevorzugt. Sie wird
+nicht ohne konkreten Bedarf in zahlreiche Dateien oder abstrakte Fragmente
+zerlegt. Zusätzliche lokale Hosts dürfen nach Abschluss der
+Vaultwarden-/Caddy-Kerninstallation als klar markierte zusätzliche Host-Blöcke in
+die bestehende Caddyfile eingefügt werden. Die Ergänzung erfolgt kontrolliert und
+idempotent, nicht durch blindes Überschreiben oder wiederholtes Anhängen.
 
 Alle betreffenden lokalen Dienste verwenden Caddys interne CA über
 `tls internal`. Clients können dadurch nach Installation des Root-CA-Zertifikats
@@ -697,6 +757,12 @@ Die gemeinsame Caddy-Instanz bedient damit:
 - DSM auf `Diskstation3`
 - Syncthing auf `Diskstation3`
 - Syncthing auf Nova
+
+Mit Ausnahme des Vaultwarden-Kerns sind diese zusätzlichen lokalen HTTPS-Hosts
+Komfortfunktionen. Sie nutzen die ohnehin vorhandene interne Root-CA, um
+Browserwarnungen zu vermeiden. Ihr Fehlen darf die Kerninfrastruktur und
+insbesondere Vaultwarden, DNS, VPN oder lokale Backups nicht funktionsunfähig
+machen.
 
 #### 7.5.3 Nicht zu migrierende Altbestände
 
@@ -771,6 +837,14 @@ der Vaultwarden-Appliance erzeugten Backups auf `Diskstation3`.
 - Syncthing wird ausschließlich nachgelagert zur bestehenden
   Vaultwarden-Backup-Architektur eingesetzt.
 
+`Diskstation3` beziehungsweise die Synology ist primär ein Daten- und
+Speicherziel, kein kritischer Infrastrukturserver. Sie übernimmt derzeit
+Speicheraufgaben, Syncthing-/Borg-bezogene Datenfunktionen und ein angeschlossenes
+Backup-Laufwerk. DNS, VPN, Vaultwarden-Kernbetrieb und andere kritische
+Nova-Funktionen dürfen nicht von ihrer Verfügbarkeit abhängen. Die
+Recovery-Architektur bleibt soweit praktisch plattformunabhängig, damit eine
+Synology nicht zwingende Voraussetzung für den Neuaufbau ist.
+
 ### 8.2 Installation und Betrieb
 
 Produktiv läuft Syncthing als `syncthing@admin.service` unter dem Benutzer
@@ -832,7 +906,10 @@ Vaultwarden-Live-Daten
 Die Vaultwarden-Appliance bleibt unabhängig von Syncthing. Ein Ausfall von
 Syncthing darf die erfolgreiche lokale Erstellung eines Vaultwarden-Backups nicht
 verhindern. Die USB-Replikation ist eine vorhandene Fähigkeit der
-Vaultwarden-Appliance und bleibt ebenfalls unabhängig von Syncthing.
+Vaultwarden-Appliance und bleibt ebenfalls unabhängig von Syncthing. Ein dafür
+verwendetes Backup-Medium ist konzeptionell vom Bootstrap-/Recovery-Stick
+`NOVA-RECOVERY` getrennt. `NOVA-RECOVERY` wird nicht als normales
+Vaultwarden-USB-Backupmedium verwendet.
 
 ### 8.5 Disaster Recovery und Syncthing-Identität
 
@@ -908,22 +985,32 @@ dokumentiert und später fest in der Konfiguration verwendet werden.
 ### 9.2 Kamera-Upload zu Prusa Connect
 
 Der Kamera-Upload wird direkt über das bestehende Docker-Image
-`jtee3d/prusa_connect_rtsp` realisiert. Es wird keine eigene Upload-Anwendung
-entwickelt.
+`jtee3d/prusa_connect_rtsp:latest` realisiert. Die Docker-basierte Lösung ist der
+verbindliche Sollzustand; eine zwischenzeitlich erwogene native
+systemd-/FFmpeg-Implementierung ist obsolet und wird nicht übernommen. Es wird
+keine eigene Upload-Anwendung entwickelt.
 
-Zu den sensitiven Werten gehören insbesondere:
+Die Verwendung von `latest` ist derzeit eine bewusste Entscheidung. Eine feste
+Tag- oder Digest-Pinnung darf später neu bewertet werden, falls eine strengere
+Reproduzierbarkeit wichtiger wird; sie ist aktuell keine Anforderung.
 
-- die Kamera-URL, falls sie Zugangsdaten enthält
-- das Prusa-Connect-Token
+Die sensitiven Werte stammen vom Recovery-Medium `NOVA-RECOVERY`:
 
-Das Prusa-Connect-Token und andere sensitive Werte dürfen niemals im
-Git-Repository gespeichert werden. Sie werden später über eine lokale `.env`-Datei
-oder eine vergleichbare Secret-Konfiguration außerhalb des Repositories
-bereitgestellt. Eine `.env.example` ohne Secrets darf bei der späteren
-Implementierung ins Repository aufgenommen werden.
+- `CAMERA_URL` enthält die vollständige RTSP-URL einschließlich der
+  Kamera-Zugangsdaten.
+- `TOKEN` enthält das Prusa-Connect-Token.
 
-**TODO:** Bei der späteren Implementierung Image-Version, Container-Parameter,
-Kameraquelle, Netzwerkmodus und die konkrete lokale Secret-Einbindung festlegen.
+`CAMERA_URL`, `TOKEN` und andere sensitive Werte dürfen niemals im
+Git-Repository gespeichert werden. Nicht geheime Werte wie Fingerprint,
+Verzögerungen, Drucker-IP und Monitorverhalten gehören dagegen in die
+versionierte Konfiguration und nicht auf das Recovery-Medium.
+
+Der Kamera-Container erhält einen festen `container_name`, damit der Monitor nicht
+von automatisch erzeugten Compose-Namen abhängt. Als verbindlicher logischer Name
+wird `prusa-connect-rtsp` verwendet.
+
+**TODO:** Bei der späteren Implementierung die nicht geheimen Container-Parameter
+und den Netzwerkmodus anhand der Image-Anforderungen festlegen.
 
 ### 9.3 Ausschluss von MediaMTX
 
@@ -940,6 +1027,10 @@ beziehungsweise längeren Drucker-Off-Zeiten unzuverlässig werden. Die bewährt
 Lösung startet und stoppt den Upload-Container deshalb gezielt abhängig von der
 Erreichbarkeit des Druckers.
 
+Auch der Monitor wird als Docker-Container und nicht als nativer
+systemd-/FFmpeg-Dienst umgesetzt. Er verwendet für den Kamera-Container den festen
+Namen `prusa-connect-rtsp` und darf nicht von generierten Compose-Namen abhängen.
+
 Die verbindliche Logik lautet:
 
 - Der Watchdog prüft `192.168.0.61` alle 30 Sekunden per Ping.
@@ -950,10 +1041,11 @@ Die verbindliche Logik lautet:
 - Die Logik bleibt funktional einfach und wird nicht unnötig erweitert.
 
 Die bisherige Synology-/Portainer-Lösung verwendete einen Alpine-Container und
-installierte `iputils` und `docker-cli` bei jedem Start. Für Nova wird stattdessen
-bevorzugt ein kleines reproduzierbares eigenes Watchdog-Image verwendet, das die
-benötigten Werkzeuge bereits enthält. Die Watchdog-Logik selbst bleibt möglichst
-einfach.
+installierte beziehungsweise verwendete `iputils` und `docker-cli`. Diese bereits
+bewährte einfache Alpine-basierte Monitor-Lösung wird für Nova bevorzugt. Ein
+eigenes Watchdog-Image wird weder verlangt noch bevorzugt. Der Monitor bindet
+`/var/run/docker.sock` ein und verwendet `docker-cli`; die Watchdog-Logik bleibt
+absichtlich einfach.
 
 ### 9.5 Docker-Zugriff
 
@@ -978,8 +1070,9 @@ Begründung:
 Zulässige Zustände sind beispielsweise:
 
 - `prusa-monitor` läuft dauerhaft.
-- `prusa-upload` läuft, wenn der Drucker erreichbar ist.
-- `prusa-upload` ist `stopped` oder `exited`, wenn der Drucker ausgeschaltet ist.
+- `prusa-connect-rtsp` läuft, wenn der Drucker erreichbar ist.
+- `prusa-connect-rtsp` ist `stopped` oder `exited`, wenn der Drucker ausgeschaltet
+  ist.
 
 `stopped` oder `exited` beim Upload-Container ist ausdrücklich nicht automatisch
 ein Fehler. Dafür wird keine zusätzliche automatische Bewertung implementiert.
@@ -1005,8 +1098,8 @@ ausschließlich zum Prusa-Watchdog.
 
 Konzeptionell werden mindestens zwei Komponenten benötigt:
 
-- `jtee3d/prusa_connect_rtsp`
-- ein eigener `prusa-monitor`-Watchdog
+- `jtee3d/prusa_connect_rtsp:latest` als `prusa-connect-rtsp`
+- ein einfacher Alpine-basierter `prusa-monitor`-Watchdog
 
 MediaMTX gehört ausdrücklich nicht dazu. Die konkrete Compose- und
 Verzeichnisstruktur wird erst bei der späteren Implementierung festgelegt.
@@ -1205,7 +1298,17 @@ eingebettete Secrets prüfen und diese auslagern.
 
 ### 11.2 Lokale Installer-Secrets
 
-Für einfache Variablen verwendet die spätere Installation die lokale Datei:
+Bevorzugte Recovery-Quelle ist ein entfernbarer USB-Stick mit ext4-Dateisystem
+und dem Dateisystem-Label `NOVA-RECOVERY`. Der Installer sucht das Medium anhand
+des Labels; ein bestimmter Mountpoint wird nicht fest vorausgesetzt.
+
+Auf dem Medium liegt die Secret-Datei unter:
+
+```text
+/secrets/secrets.env
+```
+
+Für die lokale Verwendung darf sie nach folgendem Pfad übernommen werden:
 
 ```text
 /opt/nova-bootstrap/secrets.env
@@ -1214,7 +1317,9 @@ Für einfache Variablen verwendet die spätere Installation die lokale Datei:
 Für diese Datei gelten folgende Anforderungen:
 
 - Sie liegt niemals im Git-Repository.
-- Sie wird vor der Installation manuell vom Restore-Medium nach Nova kopiert.
+- Die produktive Quelle liegt auf `NOVA-RECOVERY` und niemals im Repository.
+- Eine lokale Kopie wird nur bei vorhandenem Recovery-Medium sicher nach Nova
+  übernommen.
 - Eigentümer und Gruppe sind `root:root`.
 - Der Dateimodus ist `0600`.
 - Der spätere Installer verwendet sie ausschließlich lesend.
@@ -1224,12 +1329,24 @@ Für diese Datei gelten folgende Anforderungen:
 Nach aktuellem Stand gehören insbesondere folgende Variablen hinein:
 
 - `DYNDNS_URL`
-- `PRUSA_CONNECT_TOKEN`
-- `PRUSA_CAMERA_URL`
+- `CAMERA_URL`
+- `TOKEN`
+- `ADGUARD_PASSWORD_HASH`
 
-Enthält die Kamera-URL Zugangsdaten, wird die gesamte URL als Secret behandelt.
+`CAMERA_URL` enthält die vollständige RTSP-URL einschließlich eventueller
+Kamera-Zugangsdaten und wird vollständig als Secret behandelt. `TOKEN` ist das
+Prusa-Connect-Token. `ADGUARD_PASSWORD_HASH` enthält ausschließlich den
+vorhandenen Passwort-Hash für die AdGuard-Weboberfläche, niemals das
+Klartextpasswort.
+
 Weitere Variablen dürfen während der späteren Implementierung nur ergänzt werden,
 wenn ein tatsächlicher Bedarf besteht.
+
+Fehlt `NOVA-RECOVERY`, muss die Installation trotzdem fortgesetzt werden können.
+Fehlende Werte werden durch eindeutige Platzhalter mit dem Präfix `CHANGE_ME_`
+repräsentiert. Dienste, die ein fehlendes Secret zwingend benötigen, bleiben
+deaktiviert oder melden klar, dass eine manuelle Vervollständigung erforderlich
+ist.
 
 ### 11.3 Repository-Vorlage
 
@@ -1238,9 +1355,10 @@ Bei der späteren Implementierung wird im Repository eine Vorlage wie
 und leere oder offensichtlich nicht produktive Platzhalter, beispielsweise:
 
 ```dotenv
-DYNDNS_URL=""
-PRUSA_CONNECT_TOKEN=""
-PRUSA_CAMERA_URL=""
+DYNDNS_URL="CHANGE_ME_DYNDNS_URL"
+CAMERA_URL="CHANGE_ME_CAMERA_URL"
+TOKEN="CHANGE_ME_TOKEN"
+ADGUARD_PASSWORD_HASH="CHANGE_ME_ADGUARD_PASSWORD_HASH"
 ```
 
 Die produktive `secrets.env` muss durch `.gitignore` ausgeschlossen werden. In
@@ -1261,21 +1379,30 @@ gehören nicht in `secrets.env`:
 - Vaultwarden-Datenbanken
 - sonstige größere Restore-Artefakte
 
-Diese Daten bleiben als Dateien auf dem geschützten Restore-Medium. Dessen genaue
-Mountposition wird nicht unnötig fest verdrahtet.
+Größere Restore-Daten, insbesondere Vaultwarden-Backupgenerationen und
+Vaultwarden-Datenbanken, verbleiben auf den dafür vorgesehenen normalen
+Backup-Zielen und werden nicht standardmäßig auf `NOVA-RECOVERY` gespeichert.
+Der Bereich `/backup/` auf `NOVA-RECOVERY` bleibt ausschließlich für kleine,
+manuell ausgewählte, essenzielle Recovery-Artefakte reserviert, falls diese
+später tatsächlich benötigt werden. Der genaue Mountpoint wird nicht fest
+verdrahtet.
 
-Eine mögliche konzeptionelle Struktur lautet:
+Die verbindliche oberste Struktur des ext4-Mediums lautet:
 
 ```text
-nova-restore/
-├── secrets.env
-├── syncthing/
-│   ├── config.xml
-│   ├── key.pem
-│   └── cert.pem
-└── vaultwarden/
-    └── Vaultwarden-Backupgeneration(en)
+NOVA-RECOVERY (filesystem label)
+├── secrets/
+│   └── secrets.env
+├── backup/
+└── README.txt
 ```
+
+Die interne Struktur von `/backup/` wird erst festgelegt, wenn konkrete kleine
+Recovery-Artefakte ausgewählt wurden. Reproduzierbare Konfigurationen und Code
+gehören nicht auf das Recovery-Medium, sondern in Git. Eine gegebenenfalls dort
+gesicherte Syncthing-`config.xml` gilt wegen ihrer gerätebezogenen Identitätsdaten
+als geschütztes Restore-Artefakt und nicht als allgemeine reproduzierbare
+Konfigurationsquelle.
 
 ### 11.5 Wiederherstellung von Syncthing
 
@@ -1295,7 +1422,8 @@ darf niemals ins Repository gelangen.
 Vaultwarden wird weiterhin über die bestehende `vaultwarden-appliance`
 installiert. Anschließend wird eine gültige vorhandene
 Vaultwarden-Backupgeneration manuell über die von der Appliance bereitgestellte
-Restore-Funktion wiederhergestellt.
+Restore-Funktion wiederhergestellt. Diese Generation stammt normalerweise aus
+der regulären Vaultwarden-Backuparchitektur und nicht von `NOVA-RECOVERY`.
 
 Die Vaultwarden-Backups enthalten gemäß der bestehenden Appliance-Spezifikation
 auch die benötigten persistenten Caddy-Daten einschließlich der internen CA. So
@@ -1320,18 +1448,19 @@ Der spätere Disaster-Recovery-Ablauf ist konzeptionell wie folgt:
 
 1. Frisches unterstütztes Debian auf dem Raspberry Pi installieren.
 2. System aktualisieren.
-3. Geschütztes Restore-Medium bereitstellen.
-4. `/opt/nova-bootstrap` anlegen.
-5. `secrets.env` nach `/opt/nova-bootstrap/secrets.env` kopieren und Eigentümer,
-   Gruppe sowie Modus sicher setzen.
-6. Den zukünftigen curl-Installer von `nova-infra` starten.
-7. Der Installer baut die reproduzierbare Infrastruktur auf und verwendet die
+3. Falls vorhanden, den ext4-Stick mit Label `NOVA-RECOVERY` bereitstellen.
+4. Den zukünftigen curl-Installer von `nova-infra` starten.
+5. Der Installer erkennt das optionale Medium, legt `/opt/nova-bootstrap` an und
+   übernimmt bei vorhandenem Stick `/secrets/secrets.env` sicher nach
+   `/opt/nova-bootstrap/secrets.env`; andernfalls fährt er mit klaren
+   `CHANGE_ME_`-Platzhaltern fort.
+6. Der Installer baut die reproduzierbare Infrastruktur auf und verwendet die
    vorhandenen einfachen Secrets.
-8. Vaultwarden über die vorhandene Appliance-Restore-Funktion manuell
+7. Vaultwarden über die vorhandene Appliance-Restore-Funktion manuell
    wiederherstellen.
-9. Syncthing-Konfiguration und Geräteidentität gezielt wiederherstellen.
-10. WireGuard-Clients neu erzeugen.
-11. Abschließende Funktionskontrolle durchführen.
+8. Syncthing-Konfiguration und Geräteidentität gezielt wiederherstellen.
+9. WireGuard-Clients neu erzeugen.
+10. Abschließende Funktionskontrolle durchführen.
 
 Die genaue Reihenfolge darf bei der späteren Implementierung technisch angepasst
 werden, wenn Abhängigkeiten dies erfordern.
@@ -1342,6 +1471,10 @@ Fehlt für einen optionalen Dienst ein benötigtes Secret, gibt der spätere
 Installer eine klare und verständliche Meldung aus. Fehlende Secrets werden
 eindeutig beim Variablennamen benannt, damit beim Restore sofort erkennbar ist,
 was noch manuell bereitgestellt werden muss.
+
+Am Ende der Installation listet der Installer alle noch ungelösten Werte mit dem
+Präfix `CHANGE_ME_` auf. Dienste mit zwingend fehlenden Secrets bleiben
+deaktiviert oder werden eindeutig als manuell zu vervollständigen gemeldet.
 
 Der Installer darf:
 
@@ -1460,10 +1593,11 @@ bricht bei unklaren oder potenziell destruktiven Änderungen kontrolliert ab.
 
 ### 12.7 Umgang mit lokalen Secrets
 
-Einfache lokale Secrets werden ausschließlich lesend aus
-`/opt/nova-bootstrap/secrets.env` geladen. Die Datei wird vor der Installation
-manuell bereitgestellt. Ergänzend zu Abschnitt 11 gelten für den Installer
-folgende Anforderungen:
+Einfache lokale Secrets werden bevorzugt aus `/secrets/secrets.env` auf dem
+ext4-Medium mit Label `NOVA-RECOVERY` übernommen und anschließend ausschließlich
+lesend aus `/opt/nova-bootstrap/secrets.env` geladen. Das Medium ist optional;
+sein Fehlen darf die Gesamtinstallation nicht abbrechen. Ergänzend zu Abschnitt
+11 gelten für den Installer folgende Anforderungen:
 
 - Er gibt den Dateiinhalt nicht aus.
 - Er schreibt keine Secrets in Logs.
@@ -1473,9 +1607,12 @@ folgende Anforderungen:
   unsicheren Quellen.
 
 Fehlt ein Secret für einen optionalen Dienst, nennt der Installer verständlich
-den fehlenden Variablennamen, beispielsweise `DYNDNS_URL`,
-`PRUSA_CONNECT_TOKEN` oder `PRUSA_CAMERA_URL`, ohne einen geheimen Wert
-auszugeben.
+den fehlenden Variablennamen, beispielsweise `DYNDNS_URL`, `CAMERA_URL`, `TOKEN`
+oder `ADGUARD_PASSWORD_HASH`, ohne einen geheimen Wert auszugeben. Der fehlende
+Wert wird mit einem eindeutigen `CHANGE_ME_`-Platzhalter repräsentiert. Der
+betroffene Dienst bleibt deaktiviert oder wird eindeutig als manuell zu
+vervollständigen gemeldet. Am Installationsende werden alle ungelösten
+`CHANGE_ME_`-Werte zusammengefasst.
 
 ### 12.8 Integration externer Projekte
 
@@ -1519,6 +1656,12 @@ verwaltet. Die veraltete `apt-key`-Methode wird nicht verwendet. Wenn laut
 Spezifikation ein offizielles Projekt-Repository erforderlich ist, darf der
 Installer nicht stillschweigend auf eine ältere Version aus den
 Debian-Standardpaketen zurückfallen.
+
+`apt-cacher-ng` ist kein Bestandteil der Zielinfrastruktur. Tests mit der
+verfügbaren Internetanbindung von ungefähr 600 Mbit/s zeigten keinen relevanten
+Zeitgewinn beim Neuaufbau. Nova und Arc verwenden APT direkt. Ein Paketcache darf
+höchstens später als ausdrücklich optionale Optimierung für langsame Verbindungen
+neu bewertet werden.
 
 ### 12.11 systemd
 
@@ -1575,9 +1718,11 @@ Die konkrete Netzwerkimplementierung wird zuerst auf Atlas getestet.
 
 ### 12.15 MOTD
 
-Das MOTD wird erst erstellt, nachdem die benötigten Dienste installiert sind. Es
-dient ausschließlich der Anzeige und führt keine Reparaturaktionen aus. Ein
-Fehler im MOTD darf niemals den Login blockieren.
+Die MOTD-Grundlage darf in der Basissystemphase vorbereitet werden. Ihre
+vollständige Dienst- und Containeranzeige wird erst nach Installation der
+betreffenden Komponenten finalisiert. Das MOTD dient ausschließlich der Anzeige
+und führt keine Reparaturaktionen aus. Ein Fehler im MOTD darf niemals den Login
+blockieren.
 
 ### 12.16 Abgrenzung manueller Restore-Schritte
 
@@ -1594,25 +1739,27 @@ zwanghaft vollständig.
 
 ### 12.17 Konzeptionelle Installationsreihenfolge
 
-Die technische Reihenfolge darf bei der Implementierung angepasst werden, wenn
-Abhängigkeiten dies erfordern. Konzeptionell gilt:
+Die folgende Reihenfolge ist verbindlich auf Phasenebene. Technische Details
+innerhalb einer Phase dürfen angepasst werden, wenn Abhängigkeiten dies erfordern.
+Jede Phase soll soweit praktisch unabhängig testbar und idempotent sein:
 
-1. Plattform prüfen.
-2. Basissystem vorbereiten.
-3. Externe APT-Repositories einrichten.
-4. Grundpakete installieren.
-5. Docker bereitstellen.
-6. Unbound installieren und konfigurieren.
-7. AdGuard Home installieren und konfigurieren.
-8. WireGuard / PiVPN einrichten.
-9. DynDNS einrichten.
-10. Vaultwarden-Appliance über deren bestehenden Installer installieren.
-11. Caddy um Nova-spezifische lokale Hosts ergänzen.
-12. Syncthing installieren und für die Vaultwarden-Backup-Replikation
-    vorbereiten.
-13. Prusa-Komponenten installieren.
-14. MOTD installieren.
-15. Abschließende Funktionsprüfung durchführen.
+1. Preflight-Prüfungen für Plattform, Systemzustand und sichere Ausführbarkeit.
+2. APT-Repositories einrichten, `apt update` und vollständiges Upgrade ausführen
+   sowie alle benötigten Pakete installieren.
+3. Docker Engine und Docker Compose bereitstellen.
+4. Basisdienste wie DynDNS, WireGuard / PiVPN und Unbound konfigurieren sowie die
+   MOTD-Grundlage vorbereiten; Unbound unabhängig auf Port 5335 testen.
+5. Container einschließlich Vaultwarden-Appliance und Prusa-Komponenten
+   bereitstellen sowie die native Syncthing-Integration einrichten.
+6. Die Caddy-Kerninstallation abschließen, interne HTTPS-/CA-Funktion validieren
+   und klar markierte optionale Nova-Host-Blöcke ergänzen.
+7. AdGuard Home zuletzt installieren und konfigurieren, die bereinigten Rewrites
+   ergänzen und erst dann den kritischen DNS-Wechsel auf Port 53 ausführen.
+8. Aufräumen, Gesamtvalidierung und Reboot-Test durchführen.
+
+AdGuard und andere kritische Infrastrukturumschaltungen werden bewusst spät
+ausgeführt. Insbesondere bleibt DNS unverändert, bis sämtliche Paketdownloads und
+Docker-Pulls abgeschlossen sind.
 
 ### 12.18 Abschlussprüfung
 
@@ -1629,6 +1776,9 @@ Installation muss jedoch ein einfacher Abschlusscheck mindestens prüfen können
 - Syncthing-Service läuft.
 - Prusa-Watchdog-Container existiert beziehungsweise läuft.
 - MOTD-Datei ist installiert.
+- Alle ungelösten `CHANGE_ME_`-Platzhalter werden am Ende sichtbar gemeldet.
+- Ein Reboot-Test bestätigt, dass Dienste, Timer und Container wie vorgesehen
+  wieder verfügbar sind.
 
 Es werden keine unnötig komplexen Application-Level-Healthchecks ergänzt. Das
 MOTD bleibt die primäre schnelle Betriebsübersicht im Alltag.
@@ -1658,11 +1808,12 @@ eigenmächtig umgebaut.
 ### 13.2 Späterer Zielablauf
 
 ```text
-frisches Debian 13
+frische Raspberry-Pi-OS-/Debian-13-Basis
+  -> optional NOVA-RECOVERY bereitstellen
   -> curl-Installer
   -> vollständiger Nova-Sollzustand
-  -> Secrets und Backups einspielen
-  -> Healthcheck
+  -> erforderliche manuelle Restore-Schritte
+  -> Abschlussprüfung und Reboot-Test
 ```
 
 ### 13.3 Zu prüfende Ergebnisse
@@ -1675,7 +1826,8 @@ frisches Debian 13
 - DynDNS aktualisiert wie vorgesehen.
 - Vaultwarden ist nach Restore der separat gesicherten Daten funktionsfähig.
 - Syncthing und die Backup-Struktur sind eingerichtet; die Synchronisation zur
-  Synology und der Restore-Prozess sind überprüfbar.
+  Synology und der Restore-Prozess sind überprüfbar, ohne dass kritische Dienste
+  von der Synology-Verfügbarkeit abhängen.
 - Der Prusa-Watchdog startet und stoppt den Upload-Container entsprechend der
   Erreichbarkeit von `192.168.0.61`.
 - Die MOTD zeigt die geforderten System- und Dienstzustände.
@@ -1692,6 +1844,11 @@ Testziele umfassen mindestens:
 - Installation auf sauberem Debian 13
 - erneutes Ausführen des vollständigen Installers
 - erneutes Ausführen einzelner Module
+- unabhängige Prüfung jeder Installationsphase, soweit praktisch
+- Installation mit vorhandenem `NOVA-RECOVERY`
+- erfolgreiche Fortsetzung ohne `NOVA-RECOVERY`
+- klare Meldung aller verbleibenden `CHANGE_ME_`-Platzhalter
+- Abschluss aller APT-Downloads und Docker-Pulls vor dem DNS-Wechsel
 - Reboot des Systems
 - korrekter Start der Dienste nach dem Reboot
 - weiterhin aktive Timer
@@ -1699,6 +1856,8 @@ Testziele umfassen mindestens:
 - funktionierendes MOTD
 - keine Secrets im Git-Repository
 - keine Beschädigung produktiver Daten
+- funktionsfähige kritische Infrastruktur bei nicht erreichbarer Synology und
+  fehlenden optionalen Caddy-Komfort-Hosts
 
 Erst wenn der Aufbau auf Atlas reproduzierbar funktioniert, darf ein späterer
 Einsatz auf Nova in Betracht gezogen werden.
@@ -1720,6 +1879,7 @@ rein lesende Bestandsaufnahme am produktiven Nova geklärt werden. Dabei gilt:
 
 | Datum | Änderung |
 | --- | --- |
+| 2026-08-14 | Deployment-Reihenfolge, NOVA-RECOVERY, Caddy-/Prusa-Strategie und nachrangige Synology-Rolle konsolidiert |
 | 2026-08-09 | Verbindliche Architektur, Idempotenz- und Testanforderungen für den zukünftigen Installer ergänzt |
 | 2026-08-09 | AdGuard-Home-Sollzustand einschließlich Upstreams, Rewrites, Filter und Fallback-Strategie finalisiert |
 | 2026-08-09 | Bestandsaufnahme des Nova-Basissystems und verbindliche Bootstrap-Anforderungen ergänzt |
