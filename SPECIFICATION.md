@@ -10,7 +10,7 @@ Langfristiges Ziel ist folgender Ablauf:
 
 1. Eine frische und vollständig aktualisierte
    Raspberry-Pi-OS-/Debian-13-Basis bereitstellen.
-2. Optional das Recovery-Medium `NOVA-RECOVERY` anschließen.
+2. Optional das Recovery-Medium `INFRA-RECOVERY` anschließen.
 3. Die Installation über einen einzigen `curl`-Aufruf starten.
 4. Den vollständigen, in diesem Dokument beschriebenen Nova-Sollzustand
    herstellen; fehlende optionale Secrets verhindern den Grundaufbau nicht.
@@ -587,7 +587,7 @@ Diese URL enthält ein geheimes Update-Token und darf daher nicht unverändert
   gespeichert werden.
 - FreeDNS wird mit dem vollständigen Wert von `DYNDNS_URL` aufgerufen.
 - `DYNDNS_URL` stammt bevorzugt aus `/secrets/secrets.env` auf dem Recovery-Medium
-  mit dem Dateisystem-Label `NOVA-RECOVERY` und wird für die Installation sicher
+  mit dem Dateisystem-Label `INFRA-RECOVERY` und wird für die Installation sicher
   lokal bereitgestellt.
 - Die nicht geheime Skriptlogik darf später im Repository gespeichert werden.
 - Das Secret wird zur Laufzeit aus einer separaten lokalen, nur für `root`
@@ -908,7 +908,7 @@ Syncthing darf die erfolgreiche lokale Erstellung eines Vaultwarden-Backups nich
 verhindern. Die USB-Replikation ist eine vorhandene Fähigkeit der
 Vaultwarden-Appliance und bleibt ebenfalls unabhängig von Syncthing. Ein dafür
 verwendetes Backup-Medium ist konzeptionell vom Bootstrap-/Recovery-Stick
-`NOVA-RECOVERY` getrennt. `NOVA-RECOVERY` wird nicht als normales
+`INFRA-RECOVERY` getrennt. `INFRA-RECOVERY` wird nicht als normales
 Vaultwarden-USB-Backupmedium verwendet.
 
 ### 8.5 Disaster Recovery und Syncthing-Identität
@@ -994,7 +994,7 @@ Die Verwendung von `latest` ist derzeit eine bewusste Entscheidung. Eine feste
 Tag- oder Digest-Pinnung darf später neu bewertet werden, falls eine strengere
 Reproduzierbarkeit wichtiger wird; sie ist aktuell keine Anforderung.
 
-Die sensitiven Werte stammen vom Recovery-Medium `NOVA-RECOVERY`:
+Die sensitiven Werte stammen vom Recovery-Medium `INFRA-RECOVERY`:
 
 - `CAMERA_URL` enthält die vollständige RTSP-URL einschließlich der
   Kamera-Zugangsdaten.
@@ -1299,8 +1299,16 @@ eingebettete Secrets prüfen und diese auslagern.
 ### 11.2 Lokale Installer-Secrets
 
 Bevorzugte Recovery-Quelle ist ein entfernbarer USB-Stick mit ext4-Dateisystem
-und dem Dateisystem-Label `NOVA-RECOVERY`. Der Installer sucht das Medium anhand
+und dem Dateisystem-Label `INFRA-RECOVERY`. Der Installer sucht das Medium anhand
 des Labels; ein bestimmter Mountpoint wird nicht fest vorausgesetzt.
+
+`INFRA-RECOVERY` ist ein allgemeines, hostunabhängiges
+Infrastruktur-Bootstrap- und Recovery-Medium und nicht dauerhaft an den Hostnamen
+Nova gebunden. Die aktuelle `/secrets/secrets.env` enthält die für Nova
+benötigten Secrets. Dasselbe Medienkonzept soll später auch für Arc oder einen
+anderen Ersatz-Infrastrukturhost verwendbar bleiben. Eine Multi-Host-
+Verzeichnisstruktur wird derzeit ausdrücklich nicht eingeführt; die einfache
+Struktur bleibt unverändert.
 
 Auf dem Medium liegt die Secret-Datei unter:
 
@@ -1317,9 +1325,9 @@ Für die lokale Verwendung darf sie nach folgendem Pfad übernommen werden:
 Für diese Datei gelten folgende Anforderungen:
 
 - Sie liegt niemals im Git-Repository.
-- Die produktive Quelle liegt auf `NOVA-RECOVERY` und niemals im Repository.
-- Eine lokale Kopie wird nur bei vorhandenem Recovery-Medium sicher nach Nova
-  übernommen.
+- Die produktive Quelle liegt auf `INFRA-RECOVERY` und niemals im Repository.
+- Eine lokale Kopie wird nur bei vorhandenem Recovery-Medium sicher auf den
+  jeweiligen Zielhost übernommen; für Nova gilt der oben genannte lokale Pfad.
 - Eigentümer und Gruppe sind `root:root`.
 - Der Dateimodus ist `0600`.
 - Der spätere Installer verwendet sie ausschließlich lesend.
@@ -1342,7 +1350,7 @@ Klartextpasswort.
 Weitere Variablen dürfen während der späteren Implementierung nur ergänzt werden,
 wenn ein tatsächlicher Bedarf besteht.
 
-Fehlt `NOVA-RECOVERY`, muss die Installation trotzdem fortgesetzt werden können.
+Fehlt `INFRA-RECOVERY`, muss die Installation trotzdem fortgesetzt werden können.
 Fehlende Werte werden durch eindeutige Platzhalter mit dem Präfix `CHANGE_ME_`
 repräsentiert. Dienste, die ein fehlendes Secret zwingend benötigen, bleiben
 deaktiviert oder melden klar, dass eine manuelle Vervollständigung erforderlich
@@ -1381,8 +1389,8 @@ gehören nicht in `secrets.env`:
 
 Größere Restore-Daten, insbesondere Vaultwarden-Backupgenerationen und
 Vaultwarden-Datenbanken, verbleiben auf den dafür vorgesehenen normalen
-Backup-Zielen und werden nicht standardmäßig auf `NOVA-RECOVERY` gespeichert.
-Der Bereich `/backup/` auf `NOVA-RECOVERY` bleibt ausschließlich für kleine,
+Backup-Zielen und werden nicht standardmäßig auf `INFRA-RECOVERY` gespeichert.
+Der Bereich `/backup/` auf `INFRA-RECOVERY` bleibt ausschließlich für kleine,
 manuell ausgewählte, essenzielle Recovery-Artefakte reserviert, falls diese
 später tatsächlich benötigt werden. Der genaue Mountpoint wird nicht fest
 verdrahtet.
@@ -1390,7 +1398,7 @@ verdrahtet.
 Die verbindliche oberste Struktur des ext4-Mediums lautet:
 
 ```text
-NOVA-RECOVERY (filesystem label)
+INFRA-RECOVERY (filesystem label)
 ├── secrets/
 │   └── secrets.env
 ├── backup/
@@ -1423,7 +1431,7 @@ Vaultwarden wird weiterhin über die bestehende `vaultwarden-appliance`
 installiert. Anschließend wird eine gültige vorhandene
 Vaultwarden-Backupgeneration manuell über die von der Appliance bereitgestellte
 Restore-Funktion wiederhergestellt. Diese Generation stammt normalerweise aus
-der regulären Vaultwarden-Backuparchitektur und nicht von `NOVA-RECOVERY`.
+der regulären Vaultwarden-Backuparchitektur und nicht von `INFRA-RECOVERY`.
 
 Die Vaultwarden-Backups enthalten gemäß der bestehenden Appliance-Spezifikation
 auch die benötigten persistenten Caddy-Daten einschließlich der internen CA. So
@@ -1448,7 +1456,7 @@ Der spätere Disaster-Recovery-Ablauf ist konzeptionell wie folgt:
 
 1. Frisches unterstütztes Debian auf dem Raspberry Pi installieren.
 2. System aktualisieren.
-3. Falls vorhanden, den ext4-Stick mit Label `NOVA-RECOVERY` bereitstellen.
+3. Falls vorhanden, den ext4-Stick mit Label `INFRA-RECOVERY` bereitstellen.
 4. Den zukünftigen curl-Installer von `nova-infra` starten.
 5. Der Installer erkennt das optionale Medium, legt `/opt/nova-bootstrap` an und
    übernimmt bei vorhandenem Stick `/secrets/secrets.env` sicher nach
@@ -1594,7 +1602,7 @@ bricht bei unklaren oder potenziell destruktiven Änderungen kontrolliert ab.
 ### 12.7 Umgang mit lokalen Secrets
 
 Einfache lokale Secrets werden bevorzugt aus `/secrets/secrets.env` auf dem
-ext4-Medium mit Label `NOVA-RECOVERY` übernommen und anschließend ausschließlich
+ext4-Medium mit Label `INFRA-RECOVERY` übernommen und anschließend ausschließlich
 lesend aus `/opt/nova-bootstrap/secrets.env` geladen. Das Medium ist optional;
 sein Fehlen darf die Gesamtinstallation nicht abbrechen. Ergänzend zu Abschnitt
 11 gelten für den Installer folgende Anforderungen:
@@ -1809,7 +1817,7 @@ eigenmächtig umgebaut.
 
 ```text
 frische Raspberry-Pi-OS-/Debian-13-Basis
-  -> optional NOVA-RECOVERY bereitstellen
+  -> optional INFRA-RECOVERY bereitstellen
   -> curl-Installer
   -> vollständiger Nova-Sollzustand
   -> erforderliche manuelle Restore-Schritte
@@ -1845,8 +1853,8 @@ Testziele umfassen mindestens:
 - erneutes Ausführen des vollständigen Installers
 - erneutes Ausführen einzelner Module
 - unabhängige Prüfung jeder Installationsphase, soweit praktisch
-- Installation mit vorhandenem `NOVA-RECOVERY`
-- erfolgreiche Fortsetzung ohne `NOVA-RECOVERY`
+- Installation mit vorhandenem `INFRA-RECOVERY`
+- erfolgreiche Fortsetzung ohne `INFRA-RECOVERY`
 - klare Meldung aller verbleibenden `CHANGE_ME_`-Platzhalter
 - Abschluss aller APT-Downloads und Docker-Pulls vor dem DNS-Wechsel
 - Reboot des Systems
@@ -1879,7 +1887,8 @@ rein lesende Bestandsaufnahme am produktiven Nova geklärt werden. Dabei gilt:
 
 | Datum | Änderung |
 | --- | --- |
-| 2026-08-14 | Deployment-Reihenfolge, NOVA-RECOVERY, Caddy-/Prusa-Strategie und nachrangige Synology-Rolle konsolidiert |
+| 2026-08-15 | Recovery-Medium von Nova entkoppelt und als allgemeines `INFRA-RECOVERY` konzipiert |
+| 2026-08-14 | Deployment-Reihenfolge, INFRA-RECOVERY, Caddy-/Prusa-Strategie und nachrangige Synology-Rolle konsolidiert |
 | 2026-08-09 | Verbindliche Architektur, Idempotenz- und Testanforderungen für den zukünftigen Installer ergänzt |
 | 2026-08-09 | AdGuard-Home-Sollzustand einschließlich Upstreams, Rewrites, Filter und Fallback-Strategie finalisiert |
 | 2026-08-09 | Bestandsaufnahme des Nova-Basissystems und verbindliche Bootstrap-Anforderungen ergänzt |
