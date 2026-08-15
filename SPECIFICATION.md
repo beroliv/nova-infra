@@ -1389,12 +1389,15 @@ Nach aktuellem Stand gehören insbesondere folgende Variablen hinein:
 - `CAMERA_URL`
 - `TOKEN`
 - `ADGUARD_PASSWORD_HASH`
+- `WG_EASY_PASSWORD`
 
 `CAMERA_URL` enthält die vollständige RTSP-URL einschließlich eventueller
 Kamera-Zugangsdaten und wird vollständig als Secret behandelt. `TOKEN` ist das
 Prusa-Connect-Token. `ADGUARD_PASSWORD_HASH` enthält ausschließlich den
 vorhandenen Passwort-Hash für die AdGuard-Weboberfläche, niemals das
-Klartextpasswort.
+Klartextpasswort. `WG_EASY_PASSWORD` ist das für eine spätere wg-easy-
+Integration vorgesehene Zugangspasswort; Phase 1 installiert oder konfiguriert
+wg-easy nicht.
 
 Weitere Variablen dürfen während der späteren Implementierung nur ergänzt werden,
 wenn ein tatsächlicher Bedarf besteht.
@@ -1416,6 +1419,7 @@ DYNDNS_URL="CHANGE_ME_DYNDNS_URL"
 CAMERA_URL="CHANGE_ME_CAMERA_URL"
 TOKEN="CHANGE_ME_TOKEN"
 ADGUARD_PASSWORD_HASH="CHANGE_ME_ADGUARD_PASSWORD_HASH"
+WG_EASY_PASSWORD="CHANGE_ME_WG_EASY_PASSWORD"
 ```
 
 Die produktive `secrets.env` muss durch `.gitignore` ausgeschlossen werden. In
@@ -1665,10 +1669,10 @@ sein Fehlen darf die Gesamtinstallation nicht abbrechen. Ergänzend zu Abschnitt
 
 Fehlt ein Secret für einen optionalen Dienst, nennt der Installer verständlich
 den fehlenden Variablennamen, beispielsweise `DYNDNS_URL`, `CAMERA_URL`, `TOKEN`
-oder `ADGUARD_PASSWORD_HASH`, ohne einen geheimen Wert auszugeben. Der fehlende
-Wert wird mit einem eindeutigen `CHANGE_ME_`-Platzhalter repräsentiert. Der
-betroffene Dienst bleibt deaktiviert oder wird eindeutig als manuell zu
-vervollständigen gemeldet. Am Installationsende werden alle ungelösten
+oder `ADGUARD_PASSWORD_HASH` oder `WG_EASY_PASSWORD`, ohne einen geheimen Wert
+auszugeben. Der fehlende Wert wird mit einem eindeutigen `CHANGE_ME_`-Platzhalter
+repräsentiert. Der betroffene Dienst bleibt deaktiviert oder wird eindeutig als
+manuell zu vervollständigen gemeldet. Am Installationsende werden alle ungelösten
 `CHANGE_ME_`-Werte zusammengefasst.
 
 ### 12.8 Integration externer Projekte

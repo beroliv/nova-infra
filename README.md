@@ -14,7 +14,7 @@ umfasst:
 - optionale Erkennung des ext4-Mediums `INFRA-RECOVERY` per Dateisystem-Label und
   UUID
 - ausschließlich lesender Zugriff auf das Recovery-Medium
-- konservatives, idempotentes Zusammenführen der vier Bootstrap-Secrets nach
+- konservatives, idempotentes Zusammenführen der fünf Bootstrap-Secrets nach
   `/opt/nova-bootstrap/secrets.env`
 
 Phase 2 startet ausschließlich nach erfolgreicher Phase 1 und führt anschließend

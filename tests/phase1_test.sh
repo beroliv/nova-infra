@@ -87,7 +87,8 @@ write_all_recovery_secrets() {
     'DYNDNS_URL=https://freedns.invalid/update?token=TEST_SECRET_DYNDNS&mode=a&b=$literal' \
     "CAMERA_URL='rtsp://camera.invalid/TEST_SECRET_CAMERA?x=1&y=two words'" \
     'TOKEN="TEST_SECRET_TOKEN;$HOME&`not-executed`"' \
-    'ADGUARD_PASSWORD_HASH=$2y$10$TEST_SECRET_HASH/with=specials' > "$file"
+    'ADGUARD_PASSWORD_HASH=$2y$10$TEST_SECRET_HASH/with=specials' \
+    'WG_EASY_PASSWORD=TEST_SECRET_WG_EASY;$HOME&`not-executed`' > "$file"
 }
 
 test_no_recovery() {
@@ -100,7 +101,8 @@ test_no_recovery() {
   assert_file_contains "$local_file" 'CAMERA_URL=CHANGE_ME_CAMERA_URL'
   assert_file_contains "$local_file" 'TOKEN=CHANGE_ME_TOKEN'
   assert_file_contains "$local_file" 'ADGUARD_PASSWORD_HASH=CHANGE_ME_ADGUARD_PASSWORD_HASH'
-  grep -Fq 'Unresolved secret variables: DYNDNS_URL CAMERA_URL TOKEN ADGUARD_PASSWORD_HASH' "${case_dir}/output.log" \
+  assert_file_contains "$local_file" 'WG_EASY_PASSWORD=CHANGE_ME_WG_EASY_PASSWORD'
+  grep -Fq 'Unresolved secret variables: DYNDNS_URL CAMERA_URL TOKEN ADGUARD_PASSWORD_HASH WG_EASY_PASSWORD' "${case_dir}/output.log" \
     || fail "Missing recovery did not report unresolved names."
   pass "no INFRA-RECOVERY continues with named placeholders"
 }
@@ -116,10 +118,11 @@ test_recovery_with_all_secrets() {
   assert_file_contains "$local_file" 'CAMERA_URL=rtsp://camera.invalid/TEST_SECRET_CAMERA?x=1&y=two words'
   assert_file_contains "$local_file" 'TOKEN=TEST_SECRET_TOKEN;$HOME&`not-executed`'
   assert_file_contains "$local_file" 'ADGUARD_PASSWORD_HASH=$2y$10$TEST_SECRET_HASH/with=specials'
+  assert_file_contains "$local_file" 'WG_EASY_PASSWORD=TEST_SECRET_WG_EASY;$HOME&`not-executed`'
   if grep -q '^umount:' "${case_dir}/events.log"; then
     fail "An existing recovery mount was cleaned up by the installer."
   fi
-  pass "mounted recovery supplies all four shell-special values safely"
+  pass "mounted recovery supplies all five shell-special values safely"
 }
 
 test_missing_recovery_values() {
@@ -131,9 +134,29 @@ test_missing_recovery_values() {
 
   assert_file_contains "$local_file" 'TOKEN=TEST_SECRET_ONLY_TOKEN'
   assert_file_contains "$local_file" 'DYNDNS_URL=CHANGE_ME_DYNDNS_URL'
-  grep -Fq 'Unresolved secret variables: DYNDNS_URL CAMERA_URL ADGUARD_PASSWORD_HASH' "${case_dir}/output.log" \
+  assert_file_contains "$local_file" 'WG_EASY_PASSWORD=CHANGE_ME_WG_EASY_PASSWORD'
+  grep -Fq 'Unresolved secret variables: DYNDNS_URL CAMERA_URL ADGUARD_PASSWORD_HASH WG_EASY_PASSWORD' "${case_dir}/output.log" \
     || fail "Missing individual values were not reported by name."
   pass "missing individual values become placeholders without aborting"
+}
+
+test_missing_wg_easy_password_uses_placeholder() {
+  local case_dir local_file
+  case_dir="$(new_case missing-wg-easy-password)"
+  printf '%s\n' \
+    'DYNDNS_URL=TEST_SECRET_DYNDNS' \
+    'CAMERA_URL=TEST_SECRET_CAMERA' \
+    'TOKEN=TEST_SECRET_TOKEN' \
+    'ADGUARD_PASSWORD_HASH=TEST_SECRET_HASH' \
+    > "${case_dir}/recovery/secrets/secrets.env"
+
+  run_phase1 "$case_dir" "${case_dir}/recovery" 1
+  local_file="${case_dir}/root/opt/nova-bootstrap/secrets.env"
+
+  assert_file_contains "$local_file" 'WG_EASY_PASSWORD=CHANGE_ME_WG_EASY_PASSWORD'
+  grep -Fq 'Unresolved secret variables: WG_EASY_PASSWORD' "${case_dir}/output.log" \
+    || fail "Missing WG_EASY_PASSWORD did not report only its variable name."
+  pass "missing WG_EASY_PASSWORD receives its explicit placeholder"
 }
 
 test_existing_real_values_are_preserved() {
@@ -145,11 +168,13 @@ test_existing_real_values_are_preserved() {
     'DYNDNS_URL=TEST_SECRET_LOCAL_DYNDNS' \
     'CAMERA_URL=TEST_SECRET_LOCAL_CAMERA' \
     'TOKEN=TEST_SECRET_LOCAL_TOKEN' \
-    'ADGUARD_PASSWORD_HASH=TEST_SECRET_LOCAL_HASH' > "$local_file"
+    'ADGUARD_PASSWORD_HASH=TEST_SECRET_LOCAL_HASH' \
+    'WG_EASY_PASSWORD=TEST_SECRET_LOCAL_WG_EASY' > "$local_file"
 
   run_phase1 "$case_dir"
   assert_file_contains "$local_file" 'TOKEN=TEST_SECRET_LOCAL_TOKEN'
   assert_file_contains "$local_file" 'DYNDNS_URL=TEST_SECRET_LOCAL_DYNDNS'
+  assert_file_contains "$local_file" 'WG_EASY_PASSWORD=TEST_SECRET_LOCAL_WG_EASY'
   pass "existing real local values are preserved"
 }
 
@@ -162,7 +187,8 @@ test_placeholder_is_replaced() {
     'DYNDNS_URL=CHANGE_ME_DYNDNS_URL' \
     'CAMERA_URL=CHANGE_ME_CAMERA_URL' \
     'TOKEN=CHANGE_ME_TOKEN' \
-    'ADGUARD_PASSWORD_HASH=CHANGE_ME_ADGUARD_PASSWORD_HASH' > "$local_file"
+    'ADGUARD_PASSWORD_HASH=CHANGE_ME_ADGUARD_PASSWORD_HASH' \
+    'WG_EASY_PASSWORD=CHANGE_ME_WG_EASY_PASSWORD' > "$local_file"
   printf '%s\n' 'TOKEN=TEST_SECRET_RECOVERED_TOKEN' > "${case_dir}/recovery/secrets/secrets.env"
 
   run_phase1 "$case_dir" "${case_dir}/recovery" 1
@@ -177,18 +203,19 @@ test_conflicting_real_values_fail_safely() {
   local_file="${case_dir}/root/opt/nova-bootstrap/secrets.env"
   before_file="${case_dir}/before.env"
   printf '%s\n' \
-    'DYNDNS_URL=TEST_SECRET_LOCAL_CONFLICT' \
+    'DYNDNS_URL=CHANGE_ME_DYNDNS_URL' \
     'CAMERA_URL=CHANGE_ME_CAMERA_URL' \
     'TOKEN=CHANGE_ME_TOKEN' \
-    'ADGUARD_PASSWORD_HASH=CHANGE_ME_ADGUARD_PASSWORD_HASH' > "$local_file"
+    'ADGUARD_PASSWORD_HASH=CHANGE_ME_ADGUARD_PASSWORD_HASH' \
+    'WG_EASY_PASSWORD=TEST_SECRET_LOCAL_CONFLICT' > "$local_file"
   cp -- "$local_file" "$before_file"
-  printf '%s\n' 'DYNDNS_URL=TEST_SECRET_RECOVERY_CONFLICT' > "${case_dir}/recovery/secrets/secrets.env"
+  printf '%s\n' 'WG_EASY_PASSWORD=TEST_SECRET_RECOVERY_CONFLICT' > "${case_dir}/recovery/secrets/secrets.env"
 
   if run_phase1 "$case_dir" "${case_dir}/recovery" 1; then
     fail "Conflicting real values unexpectedly succeeded."
   fi
   cmp -s -- "$local_file" "$before_file" || fail "Conflict changed the existing local file."
-  grep -Fq 'Conflicting real local and recovery values for: DYNDNS_URL' "${case_dir}/output.log" \
+  grep -Fq 'Conflicting real local and recovery values for: WG_EASY_PASSWORD' "${case_dir}/output.log" \
     || fail "Conflict did not report the variable name."
   assert_output_excludes "${case_dir}/output.log" 'TEST_SECRET_LOCAL_CONFLICT'
   assert_output_excludes "${case_dir}/output.log" 'TEST_SECRET_RECOVERY_CONFLICT'
@@ -234,6 +261,7 @@ test_output_never_contains_values() {
   assert_output_excludes "${case_dir}/output.log" 'TEST_SECRET_CAMERA'
   assert_output_excludes "${case_dir}/output.log" 'TEST_SECRET_TOKEN'
   assert_output_excludes "${case_dir}/output.log" 'TEST_SECRET_HASH'
+  assert_output_excludes "${case_dir}/output.log" 'TEST_SECRET_WG_EASY'
   pass "normal output contains no secret values"
 }
 
@@ -405,6 +433,7 @@ printf 'TAP version 13\n'
 test_no_recovery
 test_recovery_with_all_secrets
 test_missing_recovery_values
+test_missing_wg_easy_password_uses_placeholder
 test_existing_real_values_are_preserved
 test_placeholder_is_replaced
 test_conflicting_real_values_fail_safely
