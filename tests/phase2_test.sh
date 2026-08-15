@@ -6,7 +6,7 @@ readonly TEST_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly REPOSITORY_DIR="$(CDPATH= cd -- "${TEST_DIR}/.." && pwd)"
 readonly INSTALLER="${REPOSITORY_DIR}/install.sh"
 readonly TEST_WORKSPACE="$(mktemp -d "${TMPDIR:-/tmp}/nova-phase2-tests.XXXXXX")"
-readonly EXPECTED_PACKAGES="ca-certificates curl dnsutils git gnupg iproute2 iptables iputils-ping jq nftables procps rsync sudo unattended-upgrades unbound unzip wireguard-tools xz-utils"
+readonly EXPECTED_PACKAGES="bind9-dnsutils ca-certificates curl git gnupg iproute2 iptables iputils-ping jq nftables procps rsync sudo unattended-upgrades unbound unzip wireguard-tools xz-utils"
 
 TESTS_RUN=0
 
@@ -173,6 +173,25 @@ test_package_list_is_deterministic() {
   pass "base package list is exact, consolidated, and deterministic"
 }
 
+test_real_dns_tools_package_is_validated() {
+  local case_dir
+  case_dir="$(new_case real-dns-tools-package)"
+  NOVA_TEST_MISSING_PACKAGE=bind9-dnsutils
+  if run_installer "$case_dir"; then
+    unset NOVA_TEST_MISSING_PACKAGE
+    fail "Missing bind9-dnsutils unexpectedly passed package validation."
+  fi
+  unset NOVA_TEST_MISSING_PACKAGE
+
+  grep -Fq 'Required base package is unavailable after installation: bind9-dnsutils' \
+    "${case_dir}/output.log" \
+    || fail "Phase 2 did not validate the real bind9-dnsutils package."
+  ! grep -Eq '(^|[[:space:]])dnsutils($|[[:space:]])' "${case_dir}/apt.log" \
+    || fail "Phase 2 still requested the virtual dnsutils package."
+  assert_no_phase2_marker "$case_dir"
+  pass "Debian 13 DNS tooling uses and validates bind9-dnsutils, not virtual dnsutils"
+}
+
 test_repeated_execution_is_idempotent() {
   local case_dir docker_before syncthing_before key_before
   case_dir="$(new_case idempotence)"
@@ -256,6 +275,7 @@ test_apt_update_failure_aborts
 test_full_upgrade_failure_aborts
 test_package_install_failure_aborts
 test_package_list_is_deterministic
+test_real_dns_tools_package_is_validated
 test_repeated_execution_is_idempotent
 test_no_apt_cacher_or_resolver_changes
 test_critical_service_safety_is_enforced

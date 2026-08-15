@@ -33,8 +33,8 @@ folgende Schritte aus:
 Die Basis-Paketmenge lautet:
 
 ```text
-ca-certificates curl dnsutils git gnupg iproute2 iptables iputils-ping jq
-nftables procps rsync sudo unattended-upgrades unbound unzip wireguard-tools
+bind9-dnsutils ca-certificates curl git gnupg iproute2 iptables iputils-ping
+jq nftables procps rsync sudo unattended-upgrades unbound unzip wireguard-tools
 xz-utils
 ```
 

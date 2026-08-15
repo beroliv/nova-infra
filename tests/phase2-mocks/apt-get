@@ -19,7 +19,7 @@ if [[ "$operation" == "install" ]]; then
   packages=()
   for argument in "$@"; do
     case "$argument" in
-      ca-certificates|curl|dnsutils|git|gnupg|iproute2|iptables|iputils-ping|jq|nftables|procps|rsync|sudo|unattended-upgrades|unbound|unzip|wireguard-tools|xz-utils)
+      bind9-dnsutils|ca-certificates|curl|git|gnupg|iproute2|iptables|iputils-ping|jq|nftables|procps|rsync|sudo|unattended-upgrades|unbound|unzip|wireguard-tools|xz-utils)
         packages+=("$argument")
         if ! grep -Fqx -- "$argument" "$NOVA_PHASE2_TEST_PACKAGE_STATE" 2>/dev/null; then
           printf '%s\n' "$argument" >> "$NOVA_PHASE2_TEST_PACKAGE_STATE"

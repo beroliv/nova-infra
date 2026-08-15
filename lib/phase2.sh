@@ -4,9 +4,9 @@
 # external repository preparation, and critical package-service safety.
 
 readonly -a NOVA_PHASE2_BASE_PACKAGES=(
+  "bind9-dnsutils"
   "ca-certificates"
   "curl"
-  "dnsutils"
   "git"
   "gnupg"
   "iproute2"
