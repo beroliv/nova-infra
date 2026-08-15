@@ -12,5 +12,9 @@ if (( $# > 0 )); then
 fi
 
 [[ -f "$NOVA_PHASE4A_TEST_MANAGED_CONFIG" ]] || exit 2
+if [[ ! -s "$NOVA_PHASE4A_TEST_ROOT_KEY" ]]; then
+  printf '%s\n' '/var/lib/unbound/root.key: No such file or directory' >&2
+  exit 3
+fi
 [[ "$mode" == "complete" ]] && exit 1
 exit 0

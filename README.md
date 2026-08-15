@@ -80,6 +80,9 @@ installierten Unbound-Dienst:
   Integration bleiben unverändert
 - `/var/lib/unbound/root.hints` wird reproduzierbar aus den Root-Hints des
   Debian-Pakets `dns-root-data` bereitgestellt
+- vor der vollständigen Konfigurationsprüfung initialisiert beziehungsweise
+  aktualisiert Debians paketierter `unbound-helper` den ebenfalls paketverwalteten
+  Trust Anchor `/var/lib/unbound/root.key`
 - die Konfiguration wird vor Installation sowie anschließend im vollständigen
   Debian-Include-Kontext mit `unbound-checkconf` geprüft
 - bei einer fehlgeschlagenen vollständigen Prüfung wird eine vorhandene frühere

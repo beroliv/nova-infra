@@ -7,6 +7,8 @@ readonly NOVA_PHASE4A_CONFIG_SOURCE="${NOVA_INSTALLER_DIR}/config/unbound/nova.c
 readonly NOVA_PHASE4A_CONFIG_RELATIVE_PATH="etc/unbound/unbound.conf.d/nova.conf"
 readonly NOVA_PHASE4A_MAIN_CONFIG_RELATIVE_PATH="etc/unbound/unbound.conf"
 readonly NOVA_PHASE4A_TRUST_ANCHOR_RELATIVE_PATH="etc/unbound/unbound.conf.d/root-auto-trust-anchor-file.conf"
+readonly NOVA_PHASE4A_TRUST_ANCHOR_HELPER_RELATIVE_PATH="usr/libexec/unbound-helper"
+readonly NOVA_PHASE4A_ROOT_KEY_RELATIVE_PATH="var/lib/unbound/root.key"
 readonly NOVA_PHASE4A_PACKAGED_ROOT_HINTS_RELATIVE_PATH="usr/share/dns/root.hints"
 readonly NOVA_PHASE4A_ROOT_HINTS_RELATIVE_PATH="var/lib/unbound/root.hints"
 readonly NOVA_PHASE4A_MARKER_RELATIVE_PATH="var/lib/nova-infra/phase4a-complete"
@@ -62,12 +64,15 @@ nova_phase4a_require_phase3() {
 }
 
 nova_phase4a_check_safe_paths() {
-  local config_dir main_config trust_anchor root_hints_dir packaged_root_hints
+  local config_dir main_config trust_anchor trust_anchor_helper root_key
+  local root_hints_dir packaged_root_hints
   local managed_config marker legacy_file
 
   config_dir="$(nova_phase1_root_path "/etc/unbound/unbound.conf.d")"
   main_config="$(nova_phase1_root_path "/${NOVA_PHASE4A_MAIN_CONFIG_RELATIVE_PATH}")"
   trust_anchor="$(nova_phase1_root_path "/${NOVA_PHASE4A_TRUST_ANCHOR_RELATIVE_PATH}")"
+  trust_anchor_helper="$(nova_phase1_root_path "/${NOVA_PHASE4A_TRUST_ANCHOR_HELPER_RELATIVE_PATH}")"
+  root_key="$(nova_phase1_root_path "/${NOVA_PHASE4A_ROOT_KEY_RELATIVE_PATH}")"
   root_hints_dir="$(nova_phase1_root_path "/var/lib/unbound")"
   packaged_root_hints="$(nova_phase1_root_path "/${NOVA_PHASE4A_PACKAGED_ROOT_HINTS_RELATIVE_PATH}")"
   managed_config="$(nova_phase1_root_path "/${NOVA_PHASE4A_CONFIG_RELATIVE_PATH}")"
@@ -77,6 +82,7 @@ nova_phase4a_check_safe_paths() {
   nova_phase2_assert_safe_directory "$root_hints_dir" "/var/lib/unbound"
   nova_phase2_assert_safe_file_target "$managed_config" "/etc/unbound/unbound.conf.d/nova.conf"
   nova_phase2_assert_safe_file_target "$(nova_phase1_root_path "/${NOVA_PHASE4A_ROOT_HINTS_RELATIVE_PATH}")" "/var/lib/unbound/root.hints"
+  nova_phase2_assert_safe_file_target "$root_key" "/var/lib/unbound/root.key"
   nova_phase2_assert_safe_file_target "$marker" "/var/lib/nova-infra/phase4a-complete"
 
   for legacy_file in 50-custom.conf 99-modules.conf; do
@@ -101,6 +107,11 @@ nova_phase4a_check_safe_paths() {
     nova_phase1_error "Debian packaged DNSSEC trust-anchor integration is missing or invalid."
     return 1
   fi
+  if [[ ! -f "$trust_anchor_helper" || -L "$trust_anchor_helper" \
+    || ! -x "$trust_anchor_helper" ]]; then
+    nova_phase1_error "Debian's packaged Unbound trust-anchor helper is missing or unsafe."
+    return 1
+  fi
   if [[ ! -s "$packaged_root_hints" || -L "$packaged_root_hints" ]]; then
     nova_phase1_error "Debian packaged root hints are missing or unsafe."
     return 1
@@ -111,6 +122,24 @@ nova_phase4a_check_safe_paths() {
     return 1
   fi
   nova_phase1_ok "Unbound package paths, DNSSEC trust anchor, and root hints passed safety checks."
+}
+
+nova_phase4a_initialize_trust_anchor() {
+  local helper root_key
+
+  helper="$(nova_phase1_root_path "/${NOVA_PHASE4A_TRUST_ANCHOR_HELPER_RELATIVE_PATH}")"
+  root_key="$(nova_phase1_root_path "/${NOVA_PHASE4A_ROOT_KEY_RELATIVE_PATH}")"
+
+  nova_phase1_info "Initializing Debian's packaged Unbound DNSSEC trust anchor."
+  if ! "$helper" root_trust_anchor_update >/dev/null; then
+    nova_phase1_error "Debian's Unbound trust-anchor helper failed before configuration validation."
+    return 1
+  fi
+  if [[ ! -s "$root_key" || -L "$root_key" ]]; then
+    nova_phase1_error "Debian's Unbound trust-anchor helper did not provide a safe /var/lib/unbound/root.key."
+    return 1
+  fi
+  nova_phase1_ok "Debian's packaged Unbound DNSSEC trust anchor is initialized."
 }
 
 nova_phase4a_install_root_hints() {
@@ -352,6 +381,7 @@ nova_phase4a_main() {
   NOVA_PHASE4A_CONFIG_CHANGED=0
   nova_phase4a_preflight
   nova_phase4a_install_root_hints
+  nova_phase4a_initialize_trust_anchor
   nova_phase4a_install_managed_config
   nova_phase4a_activate_service
   nova_phase1_info "Checking Unbound service ownership and listener ports."

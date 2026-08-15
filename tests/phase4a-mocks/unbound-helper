@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -eu
+
+printf 'unbound-helper:%s\n' "$*" >> "$NOVA_PHASE4A_TEST_OPERATION_LOG"
+
+[[ "$#" == "1" && "$1" == "root_trust_anchor_update" ]] || exit 2
+[[ "${NOVA_PHASE4A_TEST_HELPER_FAIL:-0}" != "1" ]] || exit 3
+[[ -s "$NOVA_PHASE4A_TEST_DNS_ROOT_KEY" ]] || exit 4
+
+cp -- "$NOVA_PHASE4A_TEST_DNS_ROOT_KEY" "$NOVA_PHASE4A_TEST_ROOT_KEY"

@@ -40,6 +40,7 @@ new_case() {
     "${case_dir}/root/etc/apt/sources.list.d" \
     "${case_dir}/root/etc/unbound/unbound.conf.d" \
     "${case_dir}/root/proc/device-tree" \
+    "${case_dir}/root/usr/libexec" \
     "${case_dir}/root/usr/share/dns" \
     "${case_dir}/root/var/lib/unbound" \
     "${case_dir}/recovery/secrets" \
@@ -59,6 +60,8 @@ new_case() {
     '. 3600000 IN NS A.ROOT-SERVERS.NET.' \
     'A.ROOT-SERVERS.NET. 3600000 IN A 198.41.0.4' \
     > "${case_dir}/root/usr/share/dns/root.hints"
+  printf '%s\n' '. IN DS 20326 8 2 TEST-PACKAGED-ROOT-KEY' \
+    > "${case_dir}/root/usr/share/dns/root.key"
   printf '%s\n' 'admin sudo' > "${case_dir}/admin.groups"
   : > "${case_dir}/apt.log"
   : > "${case_dir}/operations.log"
@@ -78,11 +81,14 @@ new_case() {
     cp -- "${REPOSITORY_DIR}/tests/phase4a-mocks/${mock_name}" \
       "${case_dir}/mock-bin/${mock_name}"
   done
+  cp -- "${REPOSITORY_DIR}/tests/phase4a-mocks/unbound-helper" \
+    "${case_dir}/root/usr/libexec/unbound-helper"
   for command_name in ip jq nft ping rsync sudo sysctl unbound unzip wg xz; do
     cp -- "${REPOSITORY_DIR}/tests/phase2-mocks/available-command" \
       "${case_dir}/mock-bin/${command_name}"
   done
   chmod +x -- "${case_dir}/mock-bin/"*
+  chmod +x -- "${case_dir}/root/usr/libexec/unbound-helper"
   printf '%s' "$case_dir"
 }
 
@@ -123,6 +129,8 @@ run_installer() {
   NOVA_PHASE4A_TEST_SYSTEMCTL_STATE="${case_dir}/systemctl" \
   NOVA_PHASE4A_TEST_PACKAGE_STATE="${case_dir}/packages.state" \
   NOVA_PHASE4A_TEST_MANAGED_CONFIG="${case_dir}/root/etc/unbound/unbound.conf.d/nova.conf" \
+  NOVA_PHASE4A_TEST_DNS_ROOT_KEY="${case_dir}/root/usr/share/dns/root.key" \
+  NOVA_PHASE4A_TEST_ROOT_KEY="${case_dir}/root/var/lib/unbound/root.key" \
   NOVA_PHASE4A_TEST_CHECKCONF_FAIL="${NOVA_TEST_UNBOUND_CHECKCONF_FAIL:-none}" \
   NOVA_PHASE4A_TEST_PORT53_LISTENER="${NOVA_TEST_UNBOUND_PORT53_LISTENER:-0}" \
   PATH="${case_dir}/mock-bin:${PATH}" \
@@ -224,6 +232,24 @@ test_packaged_root_hints_and_dnssec_anchor() {
   [[ "$anchor_before" == "$(sha256sum "$anchor")" ]] \
     || fail "Phase 4a modified Debian's packaged DNSSEC trust-anchor include."
   pass "root hints come from Debian package data and packaged DNSSEC integration remains unchanged"
+}
+
+test_missing_trust_anchor_is_initialized_before_complete_validation() {
+  local case_dir helper_line complete_line
+  case_dir="$(new_case missing-root-key)"
+  [[ ! -e "${case_dir}/root/var/lib/unbound/root.key" ]] \
+    || fail "Fresh-install fixture unexpectedly contains /var/lib/unbound/root.key."
+  run_installer "$case_dir"
+  cmp -s -- "${case_dir}/root/usr/share/dns/root.key" \
+    "${case_dir}/root/var/lib/unbound/root.key" \
+    || fail "Debian's helper did not initialize the missing packaged trust anchor."
+  helper_line="$(grep -n -m1 '^unbound-helper:root_trust_anchor_update$' "${case_dir}/operations.log")"
+  complete_line="$(grep -n -m1 '^unbound-checkconf:$' "${case_dir}/operations.log")"
+  helper_line="${helper_line%%:*}"
+  complete_line="${complete_line%%:*}"
+  (( helper_line < complete_line )) \
+    || fail "The packaged trust anchor was not initialized before complete validation."
+  pass "fresh installs initialize Debian's missing root.key before complete validation"
 }
 
 test_resolver_and_later_services_remain_untouched() {
@@ -354,6 +380,7 @@ test_phase_ordering_and_prerequisites
 test_phase3_failure_blocks_phase4a
 test_exact_managed_configuration
 test_packaged_root_hints_and_dnssec_anchor
+test_missing_trust_anchor_is_initialized_before_complete_validation
 test_resolver_and_later_services_remain_untouched
 test_checkconf_precedes_activation
 test_invalid_candidate_aborts_safely
