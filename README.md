@@ -5,7 +5,8 @@ Reproduzierbarer Aufbau des Raspberry-Pi-Infrastruktur-Nodes Nova gemäß
 
 ## Implementierungsstand
 
-Aktuell sind Phase 1, Phase 2 und Phase 3 implementiert. Phase 1 umfasst:
+Aktuell sind Phase 1, Phase 2, Phase 3 und Phase 4a implementiert. Phase 1
+umfasst:
 
 - zerstörungsfreie Prüfung auf Raspberry Pi 5, ARM64 und Debian 13/trixie
 - Prüfung von Root-Rechten, benötigten Befehlen, sicheren Zielpfaden sowie
@@ -70,6 +71,32 @@ lädt oder startet keinen Test- beziehungsweise Anwendungscontainer. Docker darf
 beim normalen Start seine eigenen Netzwerkregeln verwalten; der Installer legt
 keine zusätzlichen Firewall- oder DNS-Regeln an.
 
+Phase 4a übernimmt anschließend ausschließlich den bereits in Phase 2 aus Debian
+installierten Unbound-Dienst:
+
+- genau eine versionierte Konfiguration wird als
+  `/etc/unbound/unbound.conf.d/nova.conf` installiert
+- die Debian-Hauptkonfiguration und die paketierte DNSSEC-Trust-Anchor-
+  Integration bleiben unverändert
+- `/var/lib/unbound/root.hints` wird reproduzierbar aus den Root-Hints des
+  Debian-Pakets `dns-root-data` bereitgestellt
+- die Konfiguration wird vor Installation sowie anschließend im vollständigen
+  Debian-Include-Kontext mit `unbound-checkconf` geprüft
+- bei einer fehlgeschlagenen vollständigen Prüfung wird eine vorhandene frühere
+  `nova.conf` wiederhergestellt, bevor der Dienst aktiviert wird
+- Unbound wird als `unbound.service` aktiviert und lauscht ausschließlich über
+  IPv4 auf TCP/UDP-Port 5335, nicht auf Port 53
+- eine unveränderte Wiederholung hält den Dienst aktiv, vermeidet aber einen
+  unnötigen Neustart
+
+Der dokumentierte Resolverpfad verwendet die beiden spezifizierten
+Quad9-Forwarder bevorzugt und fällt mit `forward-first: yes` auf rekursive
+Auflösung zurück; es werden keine weiteren Forwarder ergänzt. Die unabhängige
+Validierung fragt Unbound direkt über `127.0.0.1:5335` ab und prüft normale,
+wiederholte, DNSSEC-authentifizierte sowie absichtlich DNSSEC-fehlerhafte
+Antworten. `/etc/resolv.conf`, Port 53, AdGuard und die Firewall-Konfiguration
+bleiben unverändert.
+
 Der endgültige curl-Einstieg wird erst mit der weiteren Installer-Orchestrierung
 bereitgestellt; die implementierten Phasen werden derzeit aus einem
 Repository-Checkout gestartet:
@@ -102,12 +129,14 @@ Systeme noch auf echte Recovery-Medien zu und installieren keine Pakete:
 ./tests/phase1_test.sh
 ./tests/phase2_test.sh
 ./tests/phase3_test.sh
+./tests/phase4a_test.sh
 ```
 
 Zusätzlich sollte vor einem Commit die Shell-Syntax geprüft werden:
 
 ```shell
-bash -n install.sh lib/phase1.sh lib/phase2.sh lib/phase3.sh \
+bash -n install.sh lib/phase1.sh lib/phase2.sh lib/phase3.sh lib/phase4a.sh \
   tests/phase1_test.sh tests/phase2_test.sh tests/phase3_test.sh \
-  tests/mocks/* tests/phase2-mocks/* tests/phase3-mocks/*
+  tests/phase4a_test.sh tests/mocks/* tests/phase2-mocks/* \
+  tests/phase3-mocks/* tests/phase4a-mocks/*
 ```

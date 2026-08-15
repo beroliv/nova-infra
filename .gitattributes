@@ -2,4 +2,6 @@
 tests/mocks/* text eol=lf
 tests/phase2-mocks/* text eol=lf
 tests/phase3-mocks/* text eol=lf
+tests/phase4a-mocks/* text eol=lf
+config/unbound/*.conf text eol=lf
 *.env.example text eol=lf

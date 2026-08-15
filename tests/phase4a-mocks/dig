@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+set -eu
+
+printf 'dig:%s\n' "$*" >> "$NOVA_PHASE4A_TEST_OPERATION_LOG"
+domain=""
+for argument in "$@"; do
+  case "$argument" in
+    example.com|cloudflare.com|dnssec-failed.org)
+      domain="$argument"
+      ;;
+  esac
+done
+
+case "$domain" in
+  example.com)
+    printf '%s\n' \
+      ';; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 1' \
+      ';; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1' \
+      'example.com. 300 IN A 192.0.2.10'
+    ;;
+  cloudflare.com)
+    printf '%s\n' \
+      ';; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 2' \
+      ';; flags: qr rd ra ad; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1' \
+      'cloudflare.com. 300 IN A 192.0.2.20'
+    ;;
+  dnssec-failed.org)
+    printf '%s\n' \
+      ';; ->>HEADER<<- opcode: QUERY, status: SERVFAIL, id: 3' \
+      ';; flags: qr rd ra; QUERY: 1, ANSWER: 0, AUTHORITY: 0, ADDITIONAL: 1'
+    ;;
+  *)
+    exit 2
+    ;;
+esac

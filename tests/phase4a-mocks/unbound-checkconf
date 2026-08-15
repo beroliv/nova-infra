@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+set -eu
+
+printf 'unbound-checkconf:%s\n' "$*" >> "$NOVA_PHASE4A_TEST_OPERATION_LOG"
+mode="${NOVA_PHASE4A_TEST_CHECKCONF_FAIL:-none}"
+
+if (( $# > 0 )); then
+  [[ -f "$1" ]] || exit 2
+  [[ "$mode" == "candidate" ]] && exit 1
+  exit 0
+fi
+
+[[ -f "$NOVA_PHASE4A_TEST_MANAGED_CONFIG" ]] || exit 2
+[[ "$mode" == "complete" ]] && exit 1
+exit 0
