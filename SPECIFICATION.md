@@ -375,13 +375,10 @@ späteren reproduzierbaren Sollzustand. Dabei gelten folgende Vorgaben:
 - Unbound dient als lokaler Resolver.
 - Installierte Debian-Paketversion: Unbound 1.22.0
 - Unbound läuft nativ als `unbound.service`.
-- Zentrale produktive Konfiguration: `/etc/unbound/unbound.conf`
-- Port: 5335
-- IPv4 ist aktiviert; IPv6 ist deaktiviert.
-- UDP und TCP sind aktiviert.
-- Modulkonfiguration: `module-config: "validator iterator"`
-- Root Hints: `/var/lib/unbound/root.hints`
-- Der Zugriff ist für lokale, LAN- und VPN-Netze freigegeben.
+- Das Debian-13-systemd-Unit startet Unbound mit
+  `/usr/sbin/unbound -d -p`. Durch `-p` wird kein PID-File verwendet; die von
+  `nova-infra` verwaltete Konfiguration darf daher keine `pidfile`-Direktive
+  definieren.
 - Als bevorzugte Forwarder werden die Quad9-Adressen `9.9.9.9` und
   `149.112.112.112` verwendet.
 - `forward-first: yes` bewirkt, dass Quad9 bevorzugt und bei Bedarf die rekursive
@@ -392,13 +389,72 @@ späteren reproduzierbaren Sollzustand. Dabei gelten folgende Vorgaben:
   „optimiert“ oder inhaltlich neu entworfen werden.
 - Die alten Dateien `50-custom.conf` und `99-modules.conf` sind historischer
   Bestand und werden nicht automatisch migriert.
-- Ziel ist eine eindeutige zentrale Unbound-Konfiguration.
-- Der aktuelle systemd-Dienst startet Unbound mit `-p`; ein PID-File wird daher
-  nicht benötigt.
 - Beim Neuaufbau muss die Konfiguration zunächst mit `unbound-checkconf` validiert
   werden.
 - Anschließend muss die DNS- beziehungsweise Resolver-Funktion durch einen
   Healthcheck geprüft werden.
+
+#### Konfigurationslayout und DNSSEC
+
+Die Debian-Paketkonfiguration bleibt soweit praktisch unverändert. `nova-infra`
+installiert genau eine eigene, eindeutig verwaltete Include-Datei unter:
+
+```text
+/etc/unbound/unbound.conf.d/nova.conf
+```
+
+Die produktive historische Doppelung zwischen `/etc/unbound/unbound.conf` und
+`50-custom.conf` wird nicht reproduziert. Insbesondere werden `50-custom.conf`
+und `99-modules.conf` nicht migriert. Paketverwaltete Dateien werden nicht
+unnötig ersetzt oder dupliziert.
+
+Für den DNSSEC-Trust-Anchor bleibt ausschließlich die Integration des
+Debian-Pakets maßgeblich:
+
+```text
+/etc/unbound/unbound.conf.d/root-auto-trust-anchor-file.conf
+```
+
+Die von `nova-infra` verwaltete Datei definiert deshalb keine zusätzliche
+`auto-trust-anchor-file`-Direktive. Die Modulkonfiguration bleibt
+`module-config: "validator iterator"`.
+
+#### Verbindliche Server- und Zugriffseinstellungen
+
+Die folgenden Werte sind der verbindliche Zielzustand:
+
+| Einstellung | Wert |
+| --- | --- |
+| `chroot` | `""` |
+| `verbosity` | `1` |
+| `interface` | `0.0.0.0` |
+| `port` | `5335` |
+| `do-ip4` | `yes` |
+| `do-ip6` | `no` |
+| `do-udp` | `yes` |
+| `do-tcp` | `yes` |
+| `root-hints` | `/var/lib/unbound/root.hints` |
+| `hide-identity` | `yes` |
+| `hide-version` | `yes` |
+| `harden-algo-downgrade` | `yes` |
+| `harden-referral-path` | `yes` |
+| `harden-glue` | `yes` |
+| `harden-dnssec-stripped` | `yes` |
+| `harden-below-nxdomain` | `yes` |
+| `qname-minimisation` | `yes` |
+| `aggressive-nsec` | `yes` |
+
+Folgende Zugriffskontrollen werden exakt übernommen:
+
+| Netz | Aktion |
+| --- | --- |
+| `127.0.0.0/8` | `allow` |
+| `10.0.0.0/8` | `allow` |
+| `192.168.0.0/16` | `allow` |
+| `10.8.0.0/16` | `allow` |
+
+Unbound lauscht damit über IPv4 auf Port 5335 und übernimmt nicht Port 53.
+IPv6 bleibt für Unbound deaktiviert.
 
 #### Zu übernehmende Cache- und Performance-Einstellungen
 
@@ -424,13 +480,6 @@ müssen beim Neuaufbau übernommen werden:
 | `outgoing-range` | `2048` |
 | `jostle-timeout` | `200` |
 | `edns-buffer-size` | `1232` |
-
-QNAME-Minimierung, aggressives NSEC sowie die bestehenden Hardening-Optionen sind
-ebenfalls zu übernehmen und nicht eigenständig zu optimieren.
-
-**TODO:** Die exakten bestehenden Zugriffsnetze, QNAME-Minimierungs-,
-Aggressive-NSEC- und übrigen Hardening-Optionen aus der zentralen produktiven
-Konfiguration vollständig inventarisieren.
 
 ### 4.3 DNS-Zusammenspiel
 
