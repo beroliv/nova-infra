@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+set -eu
+
+if (( $# != 2 )) || [[ "$1" != '--' ]]; then
+  exit 2
+fi
+
+mountpoint="$2"
+rm -f -- "${mountpoint}/secrets/secrets.env"
+rmdir -- "${mountpoint}/secrets"
+rm -f -- "$NOVA_MOCK_MOUNT_STATE"
+printf 'umount:%s\n' "$mountpoint" >> "$NOVA_MOCK_MOUNT_LOG"
