@@ -508,10 +508,24 @@ Systems festlegen.
 
 ## 5. VPN
 
-### 5.1 Produktiver Ist- und Sollzustand
+### 5.1 Zielarchitektur und Netzwerk
 
-- PiVPN ist installiert und wird zur Verwaltung von WireGuard verwendet.
-- WireGuard läuft nativ über `wg-quick@wg0.service`.
+Der produktive Referenzhost verwendet derzeit PiVPN und natives WireGuard. Diese
+Management-Architektur wird beim Neuaufbau nicht übernommen. Der verbindliche
+Sollzustand verwendet wg-easy als WireGuard-Management- und VPN-Dienst über die
+bereits in Phase 3 installierte Docker-/Compose-Laufzeit:
+
+- Image: `ghcr.io/wg-easy/wg-easy:15`
+- fester Containername: `wg-easy`
+- keine Verwendung von `latest`
+- keine automatische Aktualisierung auf spätere Hauptversionen
+- Hauptversionswechsel erfolgen ausschließlich manuell
+- normale Wartung innerhalb der festgelegten Hauptversion bleibt mit
+  `docker compose pull` und `docker compose up -d` möglich
+- kein Watchtower und keine andere automatische Container-Aktualisierung
+
+Die bestehende funktionale Nova-Konvention bleibt verbindlich:
+
 - Interface: `wg0`
 - VPN-Netz: `10.9.0.0/24`
 - Nova VPN-Adresse: `10.9.0.1/24`
@@ -523,35 +537,55 @@ Systems festlegen.
 - DNS für VPN-Clients: `10.9.0.1`
 - Öffentlicher Endpoint/Hostname: `bertrand.e-cloud.ch`
 - IPv4-Forwarding ist aktiviert.
-- VPN-Traffic aus `10.9.0.0/24` wird über `eth0` per MASQUERADE/NAT
-  weitergeleitet.
+- VPN-Traffic aus `10.9.0.0/24` wird per MASQUERADE/NAT weitergeleitet.
 - UFW wird nicht verwendet.
 - IPv6 für das VPN ist deaktiviert.
-- PiVPN ist für Full-Tunnel-Clients mit
-  `ALLOWED_IPS="0.0.0.0/0, ::0/0"` eingerichtet.
-- Unattended Upgrades sind laut PiVPN-Konfiguration aktiviert.
-- Die bestehende Routing- und DNS-Funktion muss beim Neuaufbau erhalten bleiben.
+- Neu erzeugte Clients verwenden IPv4-Full-Tunnel mit
+  `AllowedIPs = 0.0.0.0/0`.
 
-### 5.2 MTU-Besonderheit
+### 5.2 Weboberfläche, Initialisierung und Persistenz
 
-Zwischen der PiVPN-Konfiguration und der tatsächlich aktiven
-WireGuard-Konfiguration besteht eine bewusste beziehungsweise historisch
-entstandene Abweichung:
+Die wg-easy-Weboberfläche verwendet intern den v15-Standardport `51821/tcp`.
+In der ersten Ausbaustufe wird dieser Port ausschließlich an `127.0.0.1` des
+Hosts gebunden und weder im LAN noch im WAN direkt veröffentlicht. Der spätere
+Zugriff erfolgt ausschließlich über die gemeinsame interne Caddy-HTTPS-
+Architektur; die Caddy-Integration gehört nicht zur wg-easy-Basisphase.
 
-- In `/etc/pivpn/wireguard/setupVars.conf` steht aktuell `pivpnMTU=1200`.
-- In der tatsächlich aktiven `/etc/wireguard/wg0.conf` steht `MTU = 1420`.
-- Das laufende Interface `wg0` verwendet erfolgreich MTU 1420.
-- Aus früheren Erfahrungen ist bekannt, dass `pivpnMTU=1420` direkt in
-  `setupVars.conf` Probleme verursachen kann.
-- Deshalb darf `pivpnMTU=1420` nicht automatisch in `setupVars.conf` gesetzt
-  werden.
-- Die aktive WireGuard-MTU 1420 ist der derzeit funktionierende Referenzzustand.
+Die Erstinitialisierung erfolgt unattended mit dem Benutzernamen `admin` und dem
+Secret `WG_EASY_PASSWORD` aus `/opt/nova-bootstrap/secrets.env`. Fehlt der Wert
+oder entspricht er `CHANGE_ME_WG_EASY_PASSWORD`, wird wg-easy nicht gestartet;
+der Installer meldet die unvollständige optionale Phase, ohne die übrige
+Installation abzubrechen. Das Passwort darf niemals ausgegeben, in Git oder in
+der dauerhaften Compose-Konfiguration gespeichert werden. Die nur für die
+Erstinitialisierung benötigten Init-Variablen werden nach erfolgreicher
+Initialisierung aus der Container-Laufzeitkonfiguration entfernt.
 
-**TODO (wichtig, Atlas):** Beim Neuaufbau auf Atlas das MTU-Verhalten prüfen und
-ein reproduzierbares Verfahren bestimmen, das die funktionierende aktive MTU 1420
-herstellt, ohne ungeprüft `pivpnMTU=1420` in `setupVars.conf` zu setzen.
+Die Nova-eigene Struktur lautet:
 
-### 5.3 Client- und Key-Strategie
+```text
+/opt/wg-easy/
+├── compose.yml
+└── data/
+```
+
+`/opt/wg-easy/data` wird persistent nach `/etc/wireguard` im Container
+eingebunden. Serverzustand, wg-easy-Datenbank und später manuell erzeugte Clients
+müssen Container-Neuerstellung und Docker-Aktualisierungen überstehen.
+
+### 5.3 MTU-Besonderheit
+
+Der produktive native Referenzzustand verwendet für `wg0` erfolgreich MTU 1420.
+Die frühere PiVPN-Datei enthielt abweichend `pivpnMTU=1200`; ein direkt dort
+gesetzter Wert 1420 hatte in der Vergangenheit Probleme verursacht. Diese
+PiVPN-spezifische Konfiguration wird nicht migriert, die funktionierende aktive
+MTU 1420 bleibt jedoch der Referenzwert.
+
+**TODO (wichtig, Atlas):** Nach der wg-easy-v15-Bereitstellung das tatsächliche
+MTU-Verhalten prüfen und verifizieren, dass neu erzeugte Clients mit dem
+funktionierenden Referenzwert arbeiten. Keine nicht dokumentierte Datenbank- oder
+Konfigurationsmanipulation allein zur Erzwingung dieses Werts vornehmen.
+
+### 5.4 Client-, Key- und Disaster-Recovery-Strategie
 
 Bestehende WireGuard-Clients werden bewusst nicht restauriert. Es gelten folgende
 Vorgaben:
@@ -560,25 +594,21 @@ Vorgaben:
 - Keine Preshared Keys dürfen im Repository gespeichert werden.
 - Keine Client-Konfigurationen dürfen im Repository gespeichert werden.
 - Ein Restore alter WireGuard-Client-Keys ist nicht vorgesehen.
-- Bei einem Disaster Recovery werden die benötigten Clients mit PiVPN neu erzeugt.
+- Bei einem Disaster Recovery werden benötigte Clients anschließend manuell über
+  wg-easy neu erzeugt.
 - Dieses Vorgehen ist bewusst gewählt, weil es einfacher und sicherer ist.
 - Peer-Namen und Public Keys sind nicht Bestandteil dieser
   Infrastruktur-Spezifikation.
 
-### 5.4 Disaster-Recovery-Ablauf
+Der konzeptionelle Wiederaufbau lautet:
 
-Der spätere Disaster-Recovery-Ablauf für WireGuard ist konzeptionell wie folgt:
-
-1. PiVPN und WireGuard installieren.
-2. Serverkonfiguration für Nova herstellen.
-3. `wg0` mit `10.9.0.1/24` bereitstellen.
-4. UDP-Port `51824` verwenden.
-5. IPv4-Forwarding und NAT/MASQUERADE herstellen.
-6. VPN-DNS auf `10.9.0.1` setzen.
-7. Endpoint `bertrand.e-cloud.ch` verwenden.
-8. MTU-Verhalten entsprechend dem auf Atlas verifizierten Verfahren herstellen.
-9. Keine alten Peers wiederherstellen.
-10. Benötigte Clients anschließend mit PiVPN neu anlegen.
+1. wg-easy v15 über Docker Compose installieren.
+2. `wg0` mit `10.9.0.1/24` und UDP-Port `51824` bereitstellen.
+3. IPv4-Forwarding und NAT/MASQUERADE herstellen.
+4. VPN-DNS auf `10.9.0.1` und Endpoint `bertrand.e-cloud.ch` setzen.
+5. Das auf Atlas verifizierte MTU-Verhalten bestätigen.
+6. Keine alten Peers wiederherstellen.
+7. Benötigte Clients anschließend über wg-easy neu anlegen.
 
 ### 5.5 Firewall und nftables
 
@@ -652,7 +682,7 @@ ausgeführt werden.
 ### 6.4 Abhängigkeit zu WireGuard
 
 DynDNS hält den öffentlichen Hostnamen `bertrand.e-cloud.ch` aktuell. Dieser
-Hostname wird als öffentlicher WireGuard-/PiVPN-Endpoint verwendet. Eine Störung
+Hostname wird als öffentlicher wg-easy-/WireGuard-Endpoint verwendet. Eine Störung
 von DynDNS kann daher die Erreichbarkeit des VPNs nach einer Änderung der
 öffentlichen IP beeinträchtigen.
 
@@ -1213,7 +1243,6 @@ Nach aktuellem Stand gehören mindestens dazu:
 
 - AdGuard Home
 - Unbound
-- WireGuard / `wg-quick@wg0`
 - Syncthing
 - DynDNS Timer
 - Vaultwarden Backup Timer
@@ -1253,7 +1282,7 @@ Dabei gelten folgende Anforderungen:
 
 Die Containerliste wird bis zum Abschluss der Nova-Bestandsaufnahme nicht auf
 eine heute fest kodierte Liste beschränkt. Nach aktuellem Stand sind unter anderem
-Vaultwarden, Caddy und später die Prusa-Komponenten relevant.
+Vaultwarden, Caddy, wg-easy und später die Prusa-Komponenten relevant.
 
 **TODO:** Nach Abschluss der Nova-Bestandsaufnahme festlegen, ob und wie die
 relevanten Container dynamisch ausgewählt oder vollständig aufgelistet werden.
@@ -1395,9 +1424,8 @@ Nach aktuellem Stand gehören insbesondere folgende Variablen hinein:
 Kamera-Zugangsdaten und wird vollständig als Secret behandelt. `TOKEN` ist das
 Prusa-Connect-Token. `ADGUARD_PASSWORD_HASH` enthält ausschließlich den
 vorhandenen Passwort-Hash für die AdGuard-Weboberfläche, niemals das
-Klartextpasswort. `WG_EASY_PASSWORD` ist das für eine spätere wg-easy-
-Integration vorgesehene Zugangspasswort; Phase 1 installiert oder konfiguriert
-wg-easy nicht.
+Klartextpasswort. `WG_EASY_PASSWORD` ist das Zugangspasswort für die unattended
+wg-easy-Erstinitialisierung; Phase 1 installiert oder konfiguriert wg-easy nicht.
 
 Weitere Variablen dürfen während der späteren Implementierung nur ergänzt werden,
 wenn ein tatsächlicher Bedarf besteht.
@@ -1499,6 +1527,9 @@ CA-Schlüsselmaterial dürfen niemals im Git-Repository gespeichert werden.
 Bestehende private WireGuard-Client-Keys und Preshared Keys werden bewusst nicht
 als Teil des Nova-Disaster-Recovery gesichert. Nach einem vollständigen Neuaufbau
 werden benötigte WireGuard-Clients neu erzeugt und verteilt.
+
+Die Neuerzeugung erfolgt über wg-easy; ein Restore der früheren PiVPN-
+Clientverwaltung ist nicht vorgesehen.
 
 WireGuard-Client-Secrets dürfen weder ins Repository noch in `secrets.env`
 übernommen werden.
@@ -1610,7 +1641,7 @@ getrennt:
 - Docker
 - Unbound
 - AdGuard Home
-- WireGuard / PiVPN
+- wg-easy / WireGuard
 - DynDNS
 - Vaultwarden-Appliance-Integration
 - Syncthing
@@ -1808,7 +1839,7 @@ Jede Phase soll soweit praktisch unabhängig testbar und idempotent sein:
 2. APT-Repositories einrichten, `apt update` und vollständiges Upgrade ausführen
    sowie alle benötigten Pakete installieren.
 3. Docker Engine und Docker Compose bereitstellen.
-4. Basisdienste wie DynDNS, WireGuard / PiVPN und Unbound konfigurieren sowie die
+4. Basisdienste wie DynDNS, wg-easy / WireGuard und Unbound konfigurieren sowie die
    MOTD-Grundlage vorbereiten; Unbound unabhängig auf Port 5335 testen.
 5. Container einschließlich Vaultwarden-Appliance und Prusa-Komponenten
    bereitstellen sowie die native Syncthing-Integration einrichten.
@@ -1831,7 +1862,8 @@ Installation muss jedoch ein einfacher Abschlusscheck mindestens prüfen können
 - Docker-Service läuft.
 - Unbound-Service läuft und antwortet auf dem erwarteten Port.
 - AdGuard-Service läuft und AdGuard antwortet auf Port 53.
-- `wg0` existiert.
+- `wg0` existiert im wg-easy-Container mit der erwarteten Adresse und dem
+  erwarteten Listen-Port.
 - DynDNS-Timer ist aktiv.
 - Vaultwarden- und Caddy-Container existieren nach der Appliance-Installation.
 - Syncthing-Service läuft.
@@ -1940,6 +1972,7 @@ rein lesende Bestandsaufnahme am produktiven Nova geklärt werden. Dabei gilt:
 
 | Datum | Änderung |
 | --- | --- |
+| 2026-08-15 | PiVPN-Zielarchitektur durch wg-easy v15 mit lokaler UI-Bindung und unattended Bootstrap ersetzt |
 | 2026-08-15 | Recovery-Medium von Nova entkoppelt und als allgemeines `INFRA-RECOVERY` konzipiert |
 | 2026-08-14 | Deployment-Reihenfolge, INFRA-RECOVERY, Caddy-/Prusa-Strategie und nachrangige Synology-Rolle konsolidiert |
 | 2026-08-09 | Verbindliche Architektur, Idempotenz- und Testanforderungen für den zukünftigen Installer ergänzt |

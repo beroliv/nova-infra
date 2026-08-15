@@ -1,0 +1,23 @@
+services:
+  wg-easy:
+    image: ghcr.io/wg-easy/wg-easy:15
+    container_name: wg-easy
+    restart: unless-stopped
+    environment:
+      PORT: "51821"
+      HOST: "0.0.0.0"
+      INSECURE: "true"
+      DISABLE_IPV6: "true"
+    volumes:
+      - "/opt/wg-easy/data:/etc/wireguard"
+      - "/lib/modules:/lib/modules:ro"
+    ports:
+      - "0.0.0.0:51824:51824/udp"
+      - "127.0.0.1:51821:51821/tcp"
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      net.ipv4.ip_forward: "1"
+      net.ipv4.conf.all.src_valid_mark: "1"
+      net.ipv6.conf.all.disable_ipv6: "1"

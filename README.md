@@ -5,8 +5,8 @@ Reproduzierbarer Aufbau des Raspberry-Pi-Infrastruktur-Nodes Nova gemäß
 
 ## Implementierungsstand
 
-Aktuell sind Phase 1, Phase 2, Phase 3, Phase 4a und Phase 4b implementiert. Phase 1
-umfasst:
+Aktuell sind Phase 1, Phase 2, Phase 3, Phase 4a, Phase 4b und Phase 4c
+implementiert. Phase 1 umfasst:
 
 - zerstörungsfreie Prüfung auf Raspberry Pi 5, ARM64 und Debian 13/trixie
 - Prüfung von Root-Rechten, benötigten Befehlen, sicheren Zielpfaden sowie
@@ -121,6 +121,30 @@ Phase 4b verändert weder `/etc/resolv.conf` noch Unbound, Ports oder
 Firewall-Regeln. Vorhandene ältere DynDNS-Dateien werden ohne Ausgabe möglicher
 eingebetteter Secrets deterministisch durch die versionierten Dateien ersetzt.
 
+Phase 4c stellt anschließend wg-easy als WireGuard-Management- und VPN-Dienst
+bereit:
+
+- Docker-Image `ghcr.io/wg-easy/wg-easy:15` und fester Containername `wg-easy`
+- WireGuard über den extern erreichbaren UDP-Port `51824`
+- Weboberfläche ausschließlich über `127.0.0.1:51821`; die spätere interne
+  Caddy-HTTPS-Integration bleibt einer eigenen Phase vorbehalten
+- persistente Daten unter `/opt/wg-easy/data` und eine secret-freie
+  `/opt/wg-easy/compose.yml`
+- unattended Erstinitialisierung als `admin` mit `WG_EASY_PASSWORD`, Endpoint
+  `bertrand.e-cloud.ch`, Netz `10.9.0.0/24`, Client-DNS `10.9.0.1` und
+  IPv4-Full-Tunnel
+- Entfernung sämtlicher einmaliger `INIT_*`-Variablen aus der laufenden
+  Containerkonfiguration direkt nach erfolgreicher Initialisierung
+- Validierung von Image, Containerzustand, UDP-/UI-Bindings, persistentem Mount,
+  lokaler Weboberfläche und Neustart
+
+Fehlt `WG_EASY_PASSWORD`, bleibt wg-easy ungestartet und Phase 4c wird klar als
+unvollständig gemeldet, ohne den Installer abzubrechen. Phase 4c erzeugt keine
+Clients, installiert weder Caddy noch AdGuard und verändert weder Resolver,
+Unbound noch die Host-Firewallpolitik. Hauptversionswechsel von wg-easy bleiben
+manuell; Watchtower oder andere automatische Container-Updater werden nicht
+installiert.
+
 Der endgültige curl-Einstieg wird erst mit der weiteren Installer-Orchestrierung
 bereitgestellt; die implementierten Phasen werden derzeit aus einem
 Repository-Checkout gestartet:
@@ -155,15 +179,16 @@ Systeme noch auf echte Recovery-Medien zu und installieren keine Pakete:
 ./tests/phase3_test.sh
 ./tests/phase4a_test.sh
 ./tests/phase4b_test.sh
+./tests/phase4c_test.sh
 ```
 
 Zusätzlich sollte vor einem Commit die Shell-Syntax geprüft werden:
 
 ```shell
 bash -n install.sh lib/phase1.sh lib/phase2.sh lib/phase3.sh lib/phase4a.sh \
-  lib/phase4b.sh scripts/dyndns-update.sh \
+  lib/phase4b.sh lib/phase4c.sh scripts/dyndns-update.sh \
   tests/phase1_test.sh tests/phase2_test.sh tests/phase3_test.sh \
-  tests/phase4a_test.sh tests/phase4b_test.sh tests/mocks/* \
+  tests/phase4a_test.sh tests/phase4b_test.sh tests/phase4c_test.sh tests/mocks/* \
   tests/phase2-mocks/* tests/phase3-mocks/* tests/phase4a-mocks/* \
-  tests/phase4b-mocks/*
+  tests/phase4b-mocks/* tests/phase4c-mocks/*
 ```

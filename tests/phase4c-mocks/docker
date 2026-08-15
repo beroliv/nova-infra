@@ -1,0 +1,199 @@
+#!/usr/bin/env bash
+
+set -eu
+
+operation_log="${NOVA_PHASE4C_TEST_OPERATION_LOG:-${NOVA_PHASE3_TEST_OPERATION_LOG}}"
+state_dir="${NOVA_PHASE4C_TEST_STATE_DIR:-}"
+data_dir="${NOVA_PHASE4C_TEST_DATA_DIR:-}"
+container_state="${NOVA_PHASE3_TEST_CONTAINER_STATE:-}"
+
+printf 'docker:%s\n' "$*" >> "$operation_log"
+
+add_container() {
+  mkdir -p -- "$state_dir" "$data_dir"
+  : > "${state_dir}/running"
+  if [[ -n "$container_state" ]] && ! grep -Fxq 'wg-easy-test-id' "$container_state" 2>/dev/null; then
+    printf '%s\n' 'wg-easy-test-id' >> "$container_state"
+  fi
+}
+
+remove_container() {
+  rm -f -- "${state_dir}/running" "${state_dir}/runtime-init-env"
+  if [[ -n "$container_state" && -f "$container_state" ]]; then
+    sed -i '/^wg-easy-test-id$/d' "$container_state"
+  fi
+}
+
+record_count() {
+  printf '1\n' >> "${state_dir}/$1.count"
+}
+
+case "${1:-}" in
+  --version)
+    printf '%s\n' 'Docker version 99.0.0, build test'
+    exit 0
+    ;;
+  info)
+    printf '%s\n' '99.0.0'
+    exit 0
+    ;;
+  ps)
+    if [[ "${2:-}" == "-aq" ]]; then
+      [[ -f "$container_state" ]] && cat -- "$container_state"
+    fi
+    exit 0
+    ;;
+  inspect)
+    if [[ "${NOVA_PHASE4C_TEST_PREEXISTING_CONTAINER:-0}" == "1" ]]; then
+      mkdir -p -- "$state_dir"
+      : > "${state_dir}/running"
+    fi
+    if [[ "${2:-}" == "wg-easy" ]]; then
+      [[ -f "${state_dir}/running" ]]
+      exit
+    fi
+    [[ "${2:-}" == "--format" && "${4:-}" == "wg-easy" ]] || exit 97
+    [[ -f "${state_dir}/running" ]] || exit 1
+    format="$3"
+    case "$format" in
+      *com.docker.compose.project*)
+        printf '%s\n' "${NOVA_PHASE4C_TEST_COMPOSE_PROJECT:-wg-easy}"
+        ;;
+      *State.Running*)
+        printf '%s\n' 'true'
+        ;;
+      *Config.Image*)
+        printf '%s\n' "${NOVA_PHASE4C_TEST_IMAGE:-ghcr.io/wg-easy/wg-easy:15}"
+        ;;
+      *Config.Env*)
+        printf '%s\n' 'PORT=51821' 'HOST=0.0.0.0' 'DISABLE_IPV6=true'
+        if [[ -f "${state_dir}/runtime-init-env" ]]; then
+          printf '%s\n' 'INIT_ENABLED=true' 'INIT_PASSWORD=REDACTED_TEST_VALUE'
+        fi
+        ;;
+      *Mounts*)
+        printf '%s|%s\n' "$data_dir" '/etc/wireguard'
+        printf '%s|%s\n' '/lib/modules' '/lib/modules'
+        ;;
+      *)
+        exit 97
+        ;;
+    esac
+    exit 0
+    ;;
+  exec)
+    [[ "${2:-}" == "wg-easy" ]] || exit 97
+    if [[ "${3:-}" == "test" && "${4:-}" == "-s" ]]; then
+      case "${5:-}" in
+        /etc/wireguard/wg-easy.db)
+          [[ -s "${data_dir}/wg-easy.db" ]]
+          ;;
+        /etc/wireguard/wg0.conf)
+          [[ -s "${data_dir}/wg0.conf" ]]
+          ;;
+        *)
+          exit 97
+          ;;
+      esac
+      exit
+    fi
+    if [[ "${3:-}" == "wg" && "${4:-}" == "show" && "${5:-}" == "wg0" \
+      && "${6:-}" == "listen-port" ]]; then
+      printf '%s\n' '51824'
+      exit 0
+    fi
+    if [[ "${3:-}" == "ip" && "${4:-}" == "-4" && "${5:-}" == "-o" \
+      && "${6:-}" == "addr" && "${7:-}" == "show" && "${8:-}" == "dev" \
+      && "${9:-}" == "wg0" ]]; then
+      printf '%s\n' '7: wg0    inet 10.9.0.1/24 scope global wg0'
+      exit 0
+    fi
+    exit 97
+    ;;
+  port)
+    [[ -f "${state_dir}/running" && "${2:-}" == "wg-easy" ]] || exit 1
+    case "${3:-}" in
+      51824/udp)
+        printf '%s\n' '0.0.0.0:51824'
+        ;;
+      51821/tcp)
+        if [[ "${NOVA_PHASE4C_TEST_PUBLIC_UI:-0}" == "1" ]]; then
+          printf '%s\n' '0.0.0.0:51821'
+        else
+          printf '%s\n' '127.0.0.1:51821'
+        fi
+        ;;
+      *)
+        exit 97
+        ;;
+    esac
+    exit 0
+    ;;
+  restart)
+    [[ "${2:-}" == "wg-easy" && -f "${state_dir}/running" ]] || exit 1
+    [[ "${NOVA_PHASE4C_TEST_FAIL_STEP:-}" != "restart" ]] || exit 1
+    record_count restart
+    printf '%s\n' 'wg-easy'
+    exit 0
+    ;;
+  compose)
+    if [[ "${2:-}" == "version" ]]; then
+      printf '%s\n' 'Docker Compose version v99.0.0'
+      exit 0
+    fi
+    ;;
+  *)
+    printf 'Unexpected Docker command in Phase 4c test: %s\n' "$*" >&2
+    exit 97
+    ;;
+esac
+
+args="$*"
+mkdir -p -- "$state_dir"
+case "$args" in
+  *" config --quiet")
+    [[ "${NOVA_PHASE4C_TEST_FAIL_STEP:-}" != "config" ]] || exit 1
+    if [[ "$args" == *"compose.init.yml"* ]]; then
+      [[ -n "${WG_EASY_PASSWORD:-}" ]] || exit 2
+      [[ "${WG_EASY_PASSWORD}" == "${NOVA_PHASE4C_TEST_EXPECTED_PASSWORD:-}" ]] || exit 3
+      record_count init-config
+    else
+      record_count config
+    fi
+    ;;
+  *" pull")
+    [[ "${NOVA_PHASE4C_TEST_FAIL_STEP:-}" != "pull" ]] || exit 1
+    record_count pull
+    ;;
+  *" up -d --force-recreate")
+    [[ "${NOVA_PHASE4C_TEST_FAIL_STEP:-}" != "recreate" ]] || exit 1
+    add_container
+    rm -f -- "${state_dir}/runtime-init-env"
+    record_count recreate
+    ;;
+  *"compose.init.yml up -d")
+    [[ "${NOVA_PHASE4C_TEST_FAIL_STEP:-}" != "init" ]] || exit 1
+    [[ -n "${WG_EASY_PASSWORD:-}" ]] || exit 2
+    [[ "${WG_EASY_PASSWORD}" == "${NOVA_PHASE4C_TEST_EXPECTED_PASSWORD:-}" ]] || exit 3
+    add_container
+    printf '%s\n' 'persistent-test-database' > "${data_dir}/wg-easy.db"
+    printf '%s\n' '[Interface]' 'Address = 10.9.0.1/24' > "${data_dir}/wg0.conf"
+    : > "${state_dir}/runtime-init-env"
+    record_count init
+    printf '%s\n' 'password-received-without-command-line-leak' > "${state_dir}/password-seen"
+    ;;
+  *" up -d")
+    [[ "${NOVA_PHASE4C_TEST_FAIL_STEP:-}" != "up" ]] || exit 1
+    add_container
+    rm -f -- "${state_dir}/runtime-init-env"
+    record_count up
+    ;;
+  *" down")
+    remove_container
+    record_count down
+    ;;
+  *)
+    printf 'Unexpected Docker Compose command in Phase 4c test: %s\n' "$args" >&2
+    exit 97
+    ;;
+esac

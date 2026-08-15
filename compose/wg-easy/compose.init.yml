@@ -1,0 +1,14 @@
+services:
+  wg-easy:
+    environment:
+      INIT_ENABLED: "true"
+      INIT_USERNAME: "admin"
+      INIT_PASSWORD: "${WG_EASY_PASSWORD:?WG_EASY_PASSWORD is required}"
+      INIT_HOST: "bertrand.e-cloud.ch"
+      INIT_PORT: "51824"
+      INIT_DNS: "10.9.0.1"
+      INIT_IPV4_CIDR: "10.9.0.0/24"
+      # wg-easy v15 requires both CIDR init variables as one group. IPv6 remains
+      # inactive because the permanent configuration sets DISABLE_IPV6=true.
+      INIT_IPV6_CIDR: "fd42:42:42::/64"
+      INIT_ALLOWED_IPS: "0.0.0.0/0"
