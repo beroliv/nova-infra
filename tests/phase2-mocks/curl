@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+set -eu
+
+output_file=""
+url=""
+while (( $# > 0 )); do
+  case "$1" in
+    --output)
+      output_file="$2"
+      shift 2
+      ;;
+    http://*|https://*)
+      url="$1"
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+[[ -n "$output_file" && -n "$url" ]] || exit 2
+printf 'TEST APT KEY FOR %s\n' "$url" > "$output_file"
+printf 'curl:%s\n' "$url" >> "$NOVA_PHASE2_TEST_OPERATION_LOG"

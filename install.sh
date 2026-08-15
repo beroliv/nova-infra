@@ -7,5 +7,16 @@ readonly NOVA_INSTALLER_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 
 # shellcheck source=lib/phase1.sh
 source "${NOVA_INSTALLER_DIR}/lib/phase1.sh"
+# shellcheck source=lib/phase2.sh
+source "${NOVA_INSTALLER_DIR}/lib/phase2.sh"
+
+readonly NOVA_INSTALL_PHASES="${NOVA_INSTALL_PHASES:-2}"
+if [[ "$NOVA_INSTALL_PHASES" != "1" && "$NOVA_INSTALL_PHASES" != "2" ]]; then
+  nova_phase1_error "NOVA_INSTALL_PHASES must be 1 or 2."
+  exit 2
+fi
 
 nova_phase1_main "$@"
+if [[ "$NOVA_INSTALL_PHASES" == "2" ]]; then
+  nova_phase2_main
+fi

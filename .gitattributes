@@ -1,3 +1,4 @@
 *.sh text eol=lf
 tests/mocks/* text eol=lf
+tests/phase2-mocks/* text eol=lf
 *.env.example text eol=lf
