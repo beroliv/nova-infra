@@ -5,7 +5,7 @@ Reproduzierbarer Aufbau des Raspberry-Pi-Infrastruktur-Nodes Nova gemäß
 
 ## Implementierungsstand
 
-Aktuell sind Phase 1, Phase 2, Phase 3 und Phase 4a implementiert. Phase 1
+Aktuell sind Phase 1, Phase 2, Phase 3, Phase 4a und Phase 4b implementiert. Phase 1
 umfasst:
 
 - zerstörungsfreie Prüfung auf Raspberry Pi 5, ARM64 und Debian 13/trixie
@@ -100,6 +100,27 @@ wiederholte, DNSSEC-authentifizierte sowie absichtlich DNSSEC-fehlerhafte
 Antworten. `/etc/resolv.conf`, Port 53, AdGuard und die Firewall-Konfiguration
 bleiben unverändert.
 
+Phase 4b installiert anschließend die einfache FreeDNS-DynDNS-Integration:
+
+- `/usr/local/bin/dyndns-update.sh` liest ausschließlich `DYNDNS_URL` aus der
+  root-only Datei `/etc/nova-infra/dyndns.env`
+- die geheime URL wird weder in Git noch in einer systemd-Unit gespeichert und
+  dem Curl-Prozess über dessen Standardeingabe statt als sichtbares URL-Argument
+  übergeben
+- der Updater verwendet `curl -fsS` mit 15 Sekunden Timeout und protokolliert nur
+  sichere Erfolgs- oder Fehlermeldungen; `has not changed` gilt als Erfolg
+- `dyndns.service` ist ein Oneshot-Dienst nach `network-online.target`
+- `dyndns.timer` verwendet exakt `OnBootSec=2min`,
+  `OnUnitActiveSec=60min` und `Persistent=true`
+- bei gültigem `DYNDNS_URL` wird genau ein Update zur Validierung ausgeführt und
+  der Timer anschließend aktiviert
+- fehlt der Wert oder ist er noch `CHANGE_ME_DYNDNS_URL`, bleiben Dienst und
+  Timer deaktiviert, während der übrige Installer erfolgreich fortfährt
+
+Phase 4b verändert weder `/etc/resolv.conf` noch Unbound, Ports oder
+Firewall-Regeln. Vorhandene ältere DynDNS-Dateien werden ohne Ausgabe möglicher
+eingebetteter Secrets deterministisch durch die versionierten Dateien ersetzt.
+
 Der endgültige curl-Einstieg wird erst mit der weiteren Installer-Orchestrierung
 bereitgestellt; die implementierten Phasen werden derzeit aus einem
 Repository-Checkout gestartet:
@@ -133,13 +154,16 @@ Systeme noch auf echte Recovery-Medien zu und installieren keine Pakete:
 ./tests/phase2_test.sh
 ./tests/phase3_test.sh
 ./tests/phase4a_test.sh
+./tests/phase4b_test.sh
 ```
 
 Zusätzlich sollte vor einem Commit die Shell-Syntax geprüft werden:
 
 ```shell
 bash -n install.sh lib/phase1.sh lib/phase2.sh lib/phase3.sh lib/phase4a.sh \
+  lib/phase4b.sh scripts/dyndns-update.sh \
   tests/phase1_test.sh tests/phase2_test.sh tests/phase3_test.sh \
-  tests/phase4a_test.sh tests/mocks/* tests/phase2-mocks/* \
-  tests/phase3-mocks/* tests/phase4a-mocks/*
+  tests/phase4a_test.sh tests/phase4b_test.sh tests/mocks/* \
+  tests/phase2-mocks/* tests/phase3-mocks/* tests/phase4a-mocks/* \
+  tests/phase4b-mocks/*
 ```

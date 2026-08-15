@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+set -eu
+
+output_file=""
+url=""
+stdin_config=0
+while (( $# > 0 )); do
+  case "$1" in
+    --output)
+      output_file="$2"
+      shift 2
+      ;;
+    --config)
+      [[ "${2:-}" == "-" ]] || exit 2
+      stdin_config=1
+      shift 2
+      ;;
+    http://*|https://*)
+      url="$1"
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+[[ -n "$output_file" ]] || exit 2
+if (( stdin_config == 0 )); then
+  [[ -n "$url" ]] || exit 2
+  printf 'TEST APT KEY FOR %s\n' "$url" > "$output_file"
+  printf 'curl:%s\n' "$url" >> "$NOVA_PHASE4B_TEST_OPERATION_LOG"
+  exit 0
+fi
+
+config="$(cat)"
+[[ "$config" == url\ =\ \"https://* ]] || exit 3
+if [[ -n "${NOVA_PHASE4B_TEST_EXPECTED_URL:-}" ]]; then
+  [[ "$config" == *"$NOVA_PHASE4B_TEST_EXPECTED_URL"* ]] || exit 4
+fi
+printf '%s\n' 'curl:dyndns-update' >> "$NOVA_PHASE4B_TEST_OPERATION_LOG"
+[[ "${NOVA_PHASE4B_TEST_CURL_FAIL:-0}" != "1" ]] || exit 22
+printf '%s\n' "${NOVA_PHASE4B_TEST_CURL_RESPONSE:-Updated successfully}" > "$output_file"

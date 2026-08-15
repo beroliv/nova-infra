@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the FreeDNS dynamic DNS update hourly
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=60min
+Persistent=true
+Unit=dyndns.service
+
+[Install]
+WantedBy=timers.target

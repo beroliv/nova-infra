@@ -1,0 +1,12 @@
+[Unit]
+Description=Update FreeDNS dynamic DNS record
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/dyndns-update.sh
+User=root
+Group=root
+UMask=0077
+TimeoutStartSec=30s

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -eu
+
+printf 'systemd-analyze:%s\n' "$*" >> "$NOVA_PHASE4B_TEST_OPERATION_LOG"
+[[ "${1:-}" == "verify" ]] || exit 2
+shift
+(( $# > 0 )) || exit 2
+for unit in "$@"; do
+  [[ -f "$unit" ]] || exit 3
+done
