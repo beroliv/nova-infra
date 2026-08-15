@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+
+set -eu
+
+operation="${1:-}"
+printf 'apt:%s\n' "$operation" >> "$NOVA_PHASE3_TEST_OPERATION_LOG"
+printf '%s\n' "$*" >> "$NOVA_PHASE3_TEST_APT_LOG"
+
+if [[ "${NOVA_PHASE2_TEST_FAIL_STEP:-}" == "$operation" ]]; then
+  exit 42
+fi
+
+if [[ "$operation" == "install" ]]; then
+  docker_install=0
+  for argument in "$@"; do
+    [[ "$argument" == "docker-ce" ]] && docker_install=1
+  done
+
+  if (( docker_install == 1 )) && [[ "${NOVA_PHASE3_TEST_INSTALL_FAIL:-0}" == "1" ]]; then
+    exit 43
+  fi
+
+  unbound_was_installed=0
+  nftables_was_installed=0
+  grep -Fqx -- "unbound" "$NOVA_PHASE3_TEST_PACKAGE_STATE" 2>/dev/null && unbound_was_installed=1
+  grep -Fqx -- "nftables" "$NOVA_PHASE3_TEST_PACKAGE_STATE" 2>/dev/null && nftables_was_installed=1
+
+  packages=()
+  docker_packages=()
+  for argument in "$@"; do
+    case "$argument" in
+      bind9-dnsutils|ca-certificates|curl|git|gnupg|iproute2|iptables|iputils-ping|jq|nftables|procps|rsync|sudo|unattended-upgrades|unbound|unzip|wireguard-tools|xz-utils)
+        packages+=("$argument")
+        ;;
+      containerd.io|docker-buildx-plugin|docker-ce|docker-ce-cli|docker-compose-plugin)
+        docker_packages+=("$argument")
+        ;;
+    esac
+  done
+
+  for argument in "${packages[@]}" "${docker_packages[@]}"; do
+    if ! grep -Fqx -- "$argument" "$NOVA_PHASE3_TEST_PACKAGE_STATE" 2>/dev/null; then
+      printf '%s\n' "$argument" >> "$NOVA_PHASE3_TEST_PACKAGE_STATE"
+    fi
+  done
+  if (( ${#packages[@]} > 0 )); then
+    printf 'packages:%s\n' "${packages[*]}" >> "$NOVA_PHASE3_TEST_OPERATION_LOG"
+  fi
+  if (( ${#docker_packages[@]} > 0 )); then
+    printf 'docker-packages:%s\n' "${docker_packages[*]}" >> "$NOVA_PHASE3_TEST_OPERATION_LOG"
+    cp -- "$NOVA_PHASE3_TEST_DOCKER_COMMAND_SOURCE" "$NOVA_PHASE3_TEST_MOCK_BIN/docker"
+    chmod +x -- "$NOVA_PHASE3_TEST_MOCK_BIN/docker"
+    : > "$NOVA_PHASE3_TEST_SYSTEMCTL_STATE/active/containerd.service"
+    : > "$NOVA_PHASE3_TEST_SYSTEMCTL_STATE/active/docker.service"
+  fi
+
+  if (( unbound_was_installed == 0 )) && [[ ! -e "$NOVA_PHASE3_TEST_SYSTEMCTL_STATE/masked/unbound.service" ]]; then
+    : > "$NOVA_PHASE3_TEST_SYSTEMCTL_STATE/active/unbound.service"
+    : > "$NOVA_PHASE3_TEST_SYSTEMCTL_STATE/enabled/unbound.service"
+    printf 'simulated-autostart:%s\n' "unbound.service" >> "$NOVA_PHASE3_TEST_OPERATION_LOG"
+  fi
+  if (( nftables_was_installed == 0 )) && [[ ! -e "$NOVA_PHASE3_TEST_SYSTEMCTL_STATE/masked/nftables.service" ]]; then
+    : > "$NOVA_PHASE3_TEST_SYSTEMCTL_STATE/active/nftables.service"
+    : > "$NOVA_PHASE3_TEST_SYSTEMCTL_STATE/enabled/nftables.service"
+    printf 'simulated-autostart:%s\n' "nftables.service" >> "$NOVA_PHASE3_TEST_OPERATION_LOG"
+  fi
+fi

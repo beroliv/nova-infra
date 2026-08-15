@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+set -eu
+
+[[ "$*" == "-aG docker admin" ]] || exit 2
+printf 'usermod:%s\n' "$*" >> "$NOVA_PHASE3_TEST_OPERATION_LOG"
+
+groups="$(cat -- "$NOVA_PHASE3_TEST_ADMIN_GROUPS")"
+case " $groups " in
+  *" docker "*)
+    ;;
+  *)
+    printf '%s docker\n' "$groups" > "$NOVA_PHASE3_TEST_ADMIN_GROUPS"
+    ;;
+esac

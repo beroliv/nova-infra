@@ -5,7 +5,7 @@ Reproduzierbarer Aufbau des Raspberry-Pi-Infrastruktur-Nodes Nova gemäß
 
 ## Implementierungsstand
 
-Aktuell sind Phase 1 und Phase 2 implementiert. Phase 1 umfasst:
+Aktuell sind Phase 1, Phase 2 und Phase 3 implementiert. Phase 1 umfasst:
 
 - zerstörungsfreie Prüfung auf Raspberry Pi 5, ARM64 und Debian 13/trixie
 - Prüfung von Root-Rechten, benötigten Befehlen, sicheren Zielpfaden sowie
@@ -43,6 +43,33 @@ Firewall-Regeln und aktiviert keine Dienste späterer Phasen. Insbesondere werde
 noch keine Docker- oder Syncthing-Anwendungen installiert und kein Unbound-
 Laufzeitbetrieb eingerichtet.
 
+Phase 3 installiert Docker ausschließlich aus dem bereits von Phase 2
+vorbereiteten offiziellen Docker-Repository. Sie umfasst:
+
+- Prüfung aller Paketkandidaten auf das offizielle Docker-Repository
+- kontrollierten Abbruch bei inkompatiblen Paketen wie `docker.io`, statt diese
+  automatisch zu entfernen oder zu ersetzen
+- Installation von Docker Engine, CLI, containerd, Buildx und Compose-Plugin
+- Aktivierung und Start von `containerd.service` und `docker.service`
+- idempotente Aufnahme von `admin` in die Gruppe `docker`, einschließlich des
+  Hinweises auf eine erforderliche neue Login-Sitzung
+- Prüfung von Docker CLI, Compose, Daemon-Kommunikation, `docker ps` sowie den
+  enabled-/active-Zuständen der beiden Dienste
+- Schutz vorhandener Docker-Daten und Kontrolle, dass Phase 3 keine Container
+  erzeugt oder einen vorhandenen Containerbestand verändert
+
+Die installierte Docker-Paketmenge lautet:
+
+```text
+containerd.io docker-buildx-plugin docker-ce docker-ce-cli
+docker-compose-plugin
+```
+
+Phase 3 schreibt keine `daemon.json`, führt keine Docker-Bereinigung durch und
+lädt oder startet keinen Test- beziehungsweise Anwendungscontainer. Docker darf
+beim normalen Start seine eigenen Netzwerkregeln verwalten; der Installer legt
+keine zusätzlichen Firewall- oder DNS-Regeln an.
+
 Der endgültige curl-Einstieg wird erst mit der weiteren Installer-Orchestrierung
 bereitgestellt; die implementierten Phasen werden derzeit aus einem
 Repository-Checkout gestartet:
@@ -74,11 +101,13 @@ Systeme noch auf echte Recovery-Medien zu und installieren keine Pakete:
 ```shell
 ./tests/phase1_test.sh
 ./tests/phase2_test.sh
+./tests/phase3_test.sh
 ```
 
 Zusätzlich sollte vor einem Commit die Shell-Syntax geprüft werden:
 
 ```shell
-bash -n install.sh lib/phase1.sh lib/phase2.sh tests/phase1_test.sh \
-  tests/phase2_test.sh tests/mocks/* tests/phase2-mocks/*
+bash -n install.sh lib/phase1.sh lib/phase2.sh lib/phase3.sh \
+  tests/phase1_test.sh tests/phase2_test.sh tests/phase3_test.sh \
+  tests/mocks/* tests/phase2-mocks/* tests/phase3-mocks/*
 ```
