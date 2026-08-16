@@ -959,9 +959,20 @@ Der alte Pfad `~/backups/vaultwarden` wird nicht als zukünftiger Sollpfad
 übernommen. Der neue Syncthing-Folder zeigt auf `/opt/vaultwarden/backups` und
 behält die `sendonly`-Semantik sowie `Diskstation3` als Ziel bei.
 
-Die Folder-ID kann beim Neuaufbau neu erzeugt oder durch die restaurierte
-Syncthing-Konfiguration erhalten werden. Entscheidend sind der neue Pfad, der Typ
-`sendonly` und `Diskstation3` als Zielgerät.
+Die restaurierte Syncthing-Konfiguration erhält die bestehende Folder-ID,
+Gerätebeziehung und `sendonly`-Semantik. Beim initialen Restore wird ausschließlich
+der lokale Pfad auf `/opt/vaultwarden/backups` angepasst; eine neue Folder-ID oder
+ein neues Pairing wird nicht erzeugt.
+
+Phase 8 restauriert auf einem frischen System die gesicherten Dateien aus
+`INFRA-RECOVERY/backup/syncthing/` nach
+`/home/admin/.local/state/syncthing/`. `cert.pem` und `key.pem` werden bytegenau
+übernommen; dadurch bleibt die bestehende Geräteidentität erhalten. Die
+`config.xml` wird nur beim initialen Restore übernommen und dabei zusätzlich
+auf die Caddy-kompatible GUI-Adresse `0.0.0.0:8384` (HTTP zum bestehenden Caddy,
+`tls="false"`) angepasst. Bei einer bereits vollständigen lokalen Installation
+werden Identität, Pairings, Folder-ID und Konfiguration nicht aus dem
+Recovery-Medium überschrieben.
 
 ### 8.4 Integration mit der Vaultwarden-Appliance
 
@@ -1057,6 +1068,17 @@ Der spätere Nova-Healthcheck muss mindestens prüfen können:
 Eine fehlende oder nicht erreichbare `Diskstation3` darf als Warnung gemeldet
 werden. Sie darf jedoch nicht fälschlich als Fehlschlag der lokalen
 Vaultwarden-Backup-Erstellung gewertet werden.
+
+### 8.8 Phase-8-Integration
+
+Syncthing wird aus dem bereits vorbereiteten offiziellen Syncthing-APT-
+Repository installiert und als `syncthing@admin.service` aktiviert und gestartet.
+Der Appliance-eigene Ordner `/opt/vaultwarden/backups` bleibt unverändert; falls
+für den Benutzer `admin` erforderlich, wird ausschließlich die vorhandene
+Backup-Gruppenberechtigung ergänzt, ohne Dateien der Appliance umzueignen oder
+deren Berechtigungen zu lockern. Syncthing bleibt ein nativer Dienst; Docker,
+Caddy, AdGuard, Unbound und die Vaultwarden-Appliance werden in dieser Phase
+nicht verändert.
 
 ## 9. 3D-Drucker und Kamera-Upload
 

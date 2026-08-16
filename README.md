@@ -157,6 +157,13 @@ Unbound auf `127.0.0.1:5335`, die dokumentierten internen Upstreams und die
 persistenten Verzeichnisse `conf` und `work`. Caddy und Unbound werden in dieser
 Phase nicht verändert.
 
+Phase 8 installiert Syncthing nativ als `syncthing@admin.service`. Auf einem
+frischen System werden `cert.pem`, `key.pem` und `config.xml` einmalig aus
+`INFRA-RECOVERY/backup/syncthing/` übernommen; eine vorhandene lokale Identität
+und Konfiguration wird bei späteren Läufen nicht überschrieben. Der bestehende
+Vaultwarden-Backupordner `/opt/vaultwarden/backups` bleibt im Besitz der
+Appliance und wird über seine vorhandene Gruppenberechtigung für `admin` lesbar.
+
 Der endgültige curl-Einstieg wird erst mit der weiteren Installer-Orchestrierung
 bereitgestellt; die implementierten Phasen werden derzeit aus einem
 Repository-Checkout gestartet:
