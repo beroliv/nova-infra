@@ -8,16 +8,36 @@ restore_directory() {
 }
 trap restore_directory EXIT
 
-stacks=(/opt/vaultwarden /opt/wg-easy /opt/adguard /opt/prusa)
+update_vaultwarden() {
+  local stack=/opt/vaultwarden
+  if [[ ! -d "$stack" ]]; then
+    printf '[INFO] Skipping %s (directory not present).\n' "$stack"
+    return 0
+  fi
+  if [[ ! -f "${stack}/docker-compose.yml" || ! -f "${stack}/docker-compose.override.yml" || ! -f "${stack}/docker-compose.vwctl.yml" ]]; then
+    printf '[ERROR] Compose project is incomplete: %s.\n' "$stack" >&2
+    exit 1
+  fi
+  printf '[INFO] Updating %s (Vaultwarden and Caddy).\n' "$stack"
+  if ! (
+    cd -- "$stack"
+    docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.vwctl.yml pull
+    docker compose -f docker-compose.yml -f docker-compose.override.yml -f docker-compose.vwctl.yml up -d
+  ); then
+    printf '[ERROR] Compose update failed for %s.\n' "$stack" >&2
+    exit 1
+  fi
+}
 
-for stack in "${stacks[@]}"; do
+update_stack() {
+  local stack="$1" compose_file
   if [[ -f "${stack}/compose.yml" ]]; then
-    compose_file="compose.yml"
+    compose_file=compose.yml
   elif [[ -f "${stack}/docker-compose.yml" ]]; then
-    compose_file="docker-compose.yml"
+    compose_file=docker-compose.yml
   else
     printf '[INFO] Skipping %s (no Compose file).\n' "$stack"
-    continue
+    return 0
   fi
 
   printf '[INFO] Updating %s.\n' "$stack"
@@ -29,7 +49,12 @@ for stack in "${stacks[@]}"; do
     printf '[ERROR] Compose update failed for %s.\n' "$stack" >&2
     exit 1
   fi
-done
+}
+
+update_vaultwarden
+update_stack /opt/wg-easy
+update_stack /opt/adguard
+update_stack /opt/prusa
 
 printf '[INFO] Removing unused Docker images.\n'
 docker image prune -a -f
