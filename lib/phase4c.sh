@@ -277,7 +277,7 @@ nova_phase4c_deploy() {
 }
 
 nova_phase4c_verify_runtime() {
-  local data_dir database running image listen_port wg_address
+  local data_dir database running image listen_port wg_address logs
   local udp_bindings ui_bindings mounts password="$1"
 
   data_dir="$(nova_phase1_root_path "/${NOVA_PHASE4C_DATA_RELATIVE_PATH}")"
@@ -286,6 +286,12 @@ nova_phase4c_verify_runtime() {
   image="$(docker inspect --format '{{.Config.Image}}' wg-easy 2>/dev/null || true)"
   if [[ "$running" != "true" || "$image" != "$NOVA_PHASE4C_IMAGE" ]]; then
     nova_phase1_error "wg-easy is not running with the required v15 image."
+    return 1
+  fi
+
+  logs="$(docker logs --tail 200 wg-easy 2>&1 || true)"
+  if grep -Eiq 'ip_tables|iptables.*legacy.*nat|iptables.*legacy.*table' <<< "$logs"; then
+    nova_phase1_error "wg-easy reported a legacy iptables kernel compatibility error."
     return 1
   fi
 
