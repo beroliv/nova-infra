@@ -93,6 +93,7 @@ nova_phase7_write_config() {
       '  protection_enabled: true' \
       '  filtering_enabled: true' \
       '  refuse_any: true' \
+      '  cache_enabled: false' \
       '  cache_size: 0' \
       '  enable_dnssec: false' \
       '  upstream_dns:' \
