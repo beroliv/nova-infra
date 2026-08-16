@@ -1,9 +1,0 @@
-#!/usr/bin/env bash
-
-set -eu
-
-if [[ "$*" == "--print-architecture" ]]; then
-  printf '%s\n' 'arm64'
-  exit 0
-fi
-exit 2

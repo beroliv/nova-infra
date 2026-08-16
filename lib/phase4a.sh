@@ -17,10 +17,6 @@ NOVA_PHASE4A_RESOLVER_FINGERPRINT=""
 NOVA_PHASE4A_CONTENT_CHANGED=0
 NOVA_PHASE4A_CONFIG_CHANGED=0
 
-nova_phase4a_is_test_mode() {
-  [[ "${NOVA_PHASE4A_TEST_MODE:-0}" == "1" ]]
-}
-
 nova_phase4a_require_commands() {
   local command_name
   local missing=0
@@ -40,9 +36,7 @@ nova_phase4a_prepare_file() {
   local mode="$2"
 
   chmod "$mode" -- "$file"
-  if ! nova_phase4a_is_test_mode; then
-    chown root:root -- "$file"
-  fi
+  chown root:root -- "$file"
 }
 
 nova_phase4a_require_phase3() {

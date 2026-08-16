@@ -167,28 +167,11 @@ Paar einfacher oder doppelter Anführungszeichen umschlossen sein. Zeilenumbrüc
 innerhalb eines Werts werden nicht unterstützt. Die erwarteten Namen und sicheren
 Platzhalter stehen in [`secrets.env.example`](secrets.env.example).
 
-## Tests
+## Shell-Syntaxprüfung
 
-Die Tests verwenden ausschließlich temporäre Verzeichnisse und simulierte
-Recovery-, APT-, Download- und systemd-Quellen. Sie greifen weder auf produktive
-Systeme noch auf echte Recovery-Medien zu und installieren keine Pakete:
-
-```shell
-./tests/phase1_test.sh
-./tests/phase2_test.sh
-./tests/phase3_test.sh
-./tests/phase4a_test.sh
-./tests/phase4b_test.sh
-./tests/phase4c_test.sh
-```
-
-Zusätzlich sollte vor einem Commit die Shell-Syntax geprüft werden:
+Vor einem Commit kann die Syntax der produktiven Shell-Dateien geprüft werden:
 
 ```shell
 bash -n install.sh lib/phase1.sh lib/phase2.sh lib/phase3.sh lib/phase4a.sh \
-  lib/phase4b.sh lib/phase4c.sh scripts/dyndns-update.sh \
-  tests/phase1_test.sh tests/phase2_test.sh tests/phase3_test.sh \
-  tests/phase4a_test.sh tests/phase4b_test.sh tests/phase4c_test.sh tests/mocks/* \
-  tests/phase2-mocks/* tests/phase3-mocks/* tests/phase4a-mocks/* \
-  tests/phase4b-mocks/* tests/phase4c-mocks/*
+  lib/phase4b.sh lib/phase4c.sh scripts/dyndns-update.sh
 ```

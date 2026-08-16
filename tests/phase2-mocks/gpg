@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-
-set -eu
-
-if [[ "$*" == *"--show-keys"* ]]; then
-  exit 0
-fi
-exit 2

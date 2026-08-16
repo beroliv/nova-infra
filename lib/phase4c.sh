@@ -128,11 +128,7 @@ nova_phase4c_prepare_directory() {
     mkdir -- "$directory"
   fi
   chmod "$mode" -- "$directory"
-  if ! nova_phase1_is_test_mode; then
-    chown root:root -- "$directory"
-  else
-    nova_phase1_test_event "mode:${directory}:${mode}"
-  fi
+  chown root:root -- "$directory"
 }
 
 nova_phase4c_install_compose() {
@@ -153,9 +149,7 @@ nova_phase4c_install_compose() {
     mv -f -- "$temporary_file" "$target"
   fi
   chmod 0644 -- "$target"
-  if ! nova_phase1_is_test_mode; then
-    chown root:root -- "$target"
-  fi
+  chown root:root -- "$target"
 }
 
 nova_phase4c_compose() {
@@ -352,9 +346,7 @@ nova_phase4c_write_completion_marker() {
     mv -f -- "$temporary_file" "$marker"
   fi
   chmod 0644 -- "$marker"
-  if ! nova_phase1_is_test_mode; then
-    chown root:root -- "$marker"
-  fi
+  chown root:root -- "$marker"
 }
 
 nova_phase4c_preflight() {

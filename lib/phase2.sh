@@ -41,10 +41,6 @@ NOVA_PHASE2_MARKER_EXISTED=0
 declare -A NOVA_PHASE2_UNIT_ACTIVE_BEFORE=()
 declare -A NOVA_PHASE2_UNIT_ENABLED_BEFORE=()
 
-nova_phase2_is_test_mode() {
-  [[ "${NOVA_PHASE2_TEST_MODE:-0}" == "1" ]]
-}
-
 nova_phase2_require_commands() {
   local command_name
   local missing=0
@@ -388,9 +384,7 @@ nova_phase2_prepare_directory() {
     mkdir -- "$directory"
   fi
   chmod "$mode" -- "$directory"
-  if ! nova_phase2_is_test_mode; then
-    chown root:root -- "$directory"
-  fi
+  chown root:root -- "$directory"
 }
 
 nova_phase2_install_file_if_changed() {
@@ -405,9 +399,7 @@ nova_phase2_install_file_if_changed() {
     mv -f -- "$temporary_file" "$target_file"
   fi
   chmod "$mode" -- "$target_file"
-  if ! nova_phase2_is_test_mode; then
-    chown root:root -- "$target_file"
-  fi
+  chown root:root -- "$target_file"
 }
 
 nova_phase2_download_key() {

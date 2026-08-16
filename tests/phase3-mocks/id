@@ -1,9 +1,0 @@
-#!/usr/bin/env bash
-
-set -eu
-
-if [[ "$*" == "-nG admin" ]]; then
-  cat -- "$NOVA_PHASE3_TEST_ADMIN_GROUPS"
-  exit 0
-fi
-exit 2

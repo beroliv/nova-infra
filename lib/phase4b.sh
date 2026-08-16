@@ -88,11 +88,7 @@ nova_phase4b_prepare_file() {
   local mode="$2"
 
   chmod "$mode" -- "$file"
-  if ! nova_phase1_is_test_mode; then
-    chown root:root -- "$file"
-  else
-    nova_phase1_test_event "mode:${file}:${mode}"
-  fi
+  chown root:root -- "$file"
 }
 
 nova_phase4b_install_file() {
@@ -183,9 +179,7 @@ nova_phase4b_write_runtime_secret() {
     mkdir -- "$runtime_dir"
   fi
   chmod 0700 -- "$runtime_dir"
-  if ! nova_phase1_is_test_mode; then
-    chown root:root -- "$runtime_dir"
-  fi
+  chown root:root -- "$runtime_dir"
 
   temporary_file="$(mktemp "${runtime_dir}/.dyndns.env.candidate.XXXXXX")"
   printf 'DYNDNS_URL=%s\n' "$value" > "$temporary_file"

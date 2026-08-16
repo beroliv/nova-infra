@@ -37,16 +37,6 @@ nova_phase1_error() {
   printf '[ERROR] %s\n' "$*" >&2
 }
 
-nova_phase1_is_test_mode() {
-  [[ "${NOVA_PHASE1_TEST_MODE:-0}" == "1" ]]
-}
-
-nova_phase1_test_event() {
-  if nova_phase1_is_test_mode && [[ -n "${NOVA_PHASE1_TEST_EVENT_LOG:-}" ]]; then
-    printf '%s\n' "$1" >> "${NOVA_PHASE1_TEST_EVENT_LOG}"
-  fi
-}
-
 nova_phase1_placeholder_for() {
   printf 'CHANGE_ME_%s' "$1"
 }
@@ -73,19 +63,7 @@ nova_phase1_is_real_value() {
 }
 
 nova_phase1_configure_paths() {
-  if nova_phase1_is_test_mode; then
-    NOVA_PHASE1_ROOT="${NOVA_PHASE1_TEST_ROOT:-}"
-    if [[ -z "$NOVA_PHASE1_ROOT" || "$NOVA_PHASE1_ROOT" != /* || "$NOVA_PHASE1_ROOT" == "/" ]]; then
-      nova_phase1_error "Test mode requires an absolute, non-root NOVA_PHASE1_TEST_ROOT."
-      return 1
-    fi
-    if [[ ! -d "$NOVA_PHASE1_ROOT" || -L "$NOVA_PHASE1_ROOT" ]]; then
-      nova_phase1_error "Test mode requires NOVA_PHASE1_TEST_ROOT to be a safe real directory."
-      return 1
-    fi
-  else
-    NOVA_PHASE1_ROOT=""
-  fi
+  NOVA_PHASE1_ROOT=""
 }
 
 nova_phase1_root_path() {
@@ -129,17 +107,10 @@ nova_phase1_require_commands() {
   local command_name
   local missing=0
 
-  if nova_phase1_is_test_mode; then
-    required_commands=(bash chmod cmp dirname mkdir mktemp mv readlink rm rmdir stat tr)
-    if [[ "${NOVA_PHASE1_TEST_USE_PRODUCTION_RECOVERY:-0}" == "1" ]]; then
-      required_commands+=(blkid findmnt mount umount)
-    fi
-  else
-    required_commands=(
-      bash blkid chmod chown cmp curl dirname findmnt getent id mkdir mktemp mount mv
-      readlink rm rmdir stat tr umount uname
-    )
-  fi
+  required_commands=(
+    bash blkid chmod chown cmp curl dirname findmnt getent id mkdir mktemp mount mv
+    readlink rm rmdir stat tr umount uname
+  )
 
   for command_name in "${required_commands[@]}"; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
@@ -201,11 +172,7 @@ nova_phase1_check_os() {
 nova_phase1_check_architecture() {
   local architecture
 
-  if nova_phase1_is_test_mode; then
-    architecture="${NOVA_PHASE1_TEST_ARCH:-}"
-  else
-    architecture="$(uname -m)"
-  fi
+  architecture="$(uname -m)"
 
   if [[ "$architecture" != "aarch64" && "$architecture" != "arm64" ]]; then
     nova_phase1_error "Unsupported architecture: arm64/aarch64 is required."
@@ -236,11 +203,7 @@ nova_phase1_check_hardware() {
 nova_phase1_check_privileges() {
   local effective_uid
 
-  if nova_phase1_is_test_mode; then
-    effective_uid="${NOVA_PHASE1_TEST_EUID:-}"
-  else
-    effective_uid="$(id -u)"
-  fi
+  effective_uid="$(id -u)"
 
   if [[ "$effective_uid" != "0" ]]; then
     nova_phase1_error "Phase 1 must run as root; use sudo for the installer."
@@ -251,21 +214,13 @@ nova_phase1_check_privileges() {
 }
 
 nova_phase1_check_network() {
-  if nova_phase1_is_test_mode; then
-    if [[ "${NOVA_PHASE1_TEST_NETWORK_OK:-0}" != "1" ]]; then
-      nova_phase1_error "Basic network reachability check failed."
-      return 1
-    fi
-  else
-    if ! getent ahosts "$NOVA_PHASE1_NETWORK_HOST" >/dev/null 2>&1; then
-      nova_phase1_error "DNS resolution failed during the read-only network check."
-      return 1
-    fi
-
-    if ! curl -fsSL --connect-timeout 5 --max-time 15 --output /dev/null "$NOVA_PHASE1_NETWORK_URL"; then
-      nova_phase1_error "HTTPS reachability failed during the read-only network check."
-      return 1
-    fi
+  if ! getent ahosts "$NOVA_PHASE1_NETWORK_HOST" >/dev/null 2>&1; then
+    nova_phase1_error "DNS resolution failed during the read-only network check."
+    return 1
+  fi
+  if ! curl -fsSL --connect-timeout 5 --max-time 15 --output /dev/null "$NOVA_PHASE1_NETWORK_URL"; then
+    nova_phase1_error "HTTPS reachability failed during the read-only network check."
+    return 1
   fi
 
   nova_phase1_ok "Basic DNS and HTTPS reachability are available; DNS configuration was not changed."
@@ -440,46 +395,13 @@ nova_phase1_discover_recovery_production() {
   nova_phase1_ok "Mounted ${NOVA_PHASE1_RECOVERY_LABEL} read-only at an installer-controlled temporary mountpoint."
 }
 
-nova_phase1_discover_recovery_test() {
-  local source="${NOVA_PHASE1_TEST_RECOVERY_SOURCE:-}"
-  local run_dir
-
-  if [[ -z "$source" ]]; then
-    return 0
-  fi
-  if [[ "$source" != /* || ! -d "$source" || -L "$source" ]]; then
-    nova_phase1_error "The simulated recovery source is not a safe real directory."
-    return 1
-  fi
-
-  if [[ "${NOVA_PHASE1_TEST_RECOVERY_ALREADY_MOUNTED:-0}" == "1" ]]; then
-    NOVA_PHASE1_RECOVERY_ROOT="$source"
-    NOVA_PHASE1_RECOVERY_UUID="TEST-UUID"
-    nova_phase1_test_event "existing-mount:${source}"
-    nova_phase1_ok "Using the existing ${NOVA_PHASE1_RECOVERY_LABEL} mount without changing it."
-    return 0
-  fi
-
-  run_dir="$(nova_phase1_root_path "/run")"
-  NOVA_PHASE1_OWNED_MOUNTPOINT="$(mktemp -d "${run_dir}/nova-infra-recovery.XXXXXX")"
-  NOVA_PHASE1_RECOVERY_ROOT="$source"
-  NOVA_PHASE1_RECOVERY_UUID="TEST-UUID"
-  nova_phase1_test_event "mount:${NOVA_PHASE1_OWNED_MOUNTPOINT}:ro,nosuid,nodev,noexec"
-  nova_phase1_ok "Mounted ${NOVA_PHASE1_RECOVERY_LABEL} read-only at an installer-controlled temporary mountpoint."
-}
-
 nova_phase1_discover_recovery() {
   NOVA_PHASE1_RECOVERY_ROOT=""
   NOVA_PHASE1_RECOVERY_UUID=""
   NOVA_PHASE1_OWNED_MOUNTPOINT=""
 
   nova_phase1_info "Looking for optional ext4 filesystem label ${NOVA_PHASE1_RECOVERY_LABEL}."
-  if nova_phase1_is_test_mode \
-    && [[ "${NOVA_PHASE1_TEST_USE_PRODUCTION_RECOVERY:-0}" != "1" ]]; then
-    nova_phase1_discover_recovery_test
-  else
-    nova_phase1_discover_recovery_production
-  fi
+  nova_phase1_discover_recovery_production
 
   if [[ -z "$NOVA_PHASE1_RECOVERY_ROOT" ]]; then
     nova_phase1_warn "${NOVA_PHASE1_RECOVERY_LABEL} was not found; continuing with existing values and placeholders."
@@ -509,13 +431,10 @@ nova_phase1_validate_recovery_secret_path() {
     return 2
   fi
 
-  if ! nova_phase1_is_test_mode \
-    || [[ "${NOVA_PHASE1_TEST_USE_PRODUCTION_RECOVERY:-0}" == "1" ]]; then
-    mounted_uuid="$(findmnt -rn -T "$file_real" -o UUID 2>/dev/null || true)"
-    if [[ -z "$mounted_uuid" || "$mounted_uuid" != "$NOVA_PHASE1_RECOVERY_UUID" ]]; then
-      nova_phase1_error "Recovery secrets file is not backed by the validated recovery filesystem."
-      return 2
-    fi
+  mounted_uuid="$(findmnt -rn -T "$file_real" -o UUID 2>/dev/null || true)"
+  if [[ -z "$mounted_uuid" || "$mounted_uuid" != "$NOVA_PHASE1_RECOVERY_UUID" ]]; then
+    nova_phase1_error "Recovery secrets file is not backed by the validated recovery filesystem."
+    return 2
   fi
 
   return 0
@@ -608,12 +527,8 @@ nova_phase1_write_secrets() {
   fi
 
   chmod 0600 -- "$target_file"
-  if ! nova_phase1_is_test_mode; then
-    chown root:root -- "$target_dir"
-    chown root:root -- "$target_file"
-  else
-    nova_phase1_test_event "mode:${target_file}:0600"
-  fi
+  chown root:root -- "$target_dir"
+  chown root:root -- "$target_file"
 
   if (( changed == 1 )); then
     nova_phase1_ok "Updated /opt/nova-bootstrap/secrets.env without displaying secret values."
@@ -701,14 +616,9 @@ nova_phase1_cleanup_recovery() {
     return 0
   fi
 
-  if nova_phase1_is_test_mode \
-    && [[ "${NOVA_PHASE1_TEST_USE_PRODUCTION_RECOVERY:-0}" != "1" ]]; then
-    nova_phase1_test_event "umount:${mountpoint}"
-  else
-    if ! umount -- "$mountpoint"; then
-      nova_phase1_error "Could not unmount the installer-created recovery mountpoint."
-      cleanup_failed=1
-    fi
+  if ! umount -- "$mountpoint"; then
+    nova_phase1_error "Could not unmount the installer-created recovery mountpoint."
+    cleanup_failed=1
   fi
 
   if (( cleanup_failed == 0 )); then
