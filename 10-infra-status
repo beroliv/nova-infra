@@ -140,5 +140,4 @@ if have_cmd docker; then
 fi
 
 # ---------- footer ----------
-echo "${C_DIM} Kernel:${C_RESET}   $(uname -r)"
 echo
