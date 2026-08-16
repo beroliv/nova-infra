@@ -266,8 +266,10 @@ nova_phase4c_deploy() {
     nova_phase4c_initialise "$password"
   else
     nova_phase1_info "Existing persistent wg-easy state found; unattended initialization is not repeated."
-    if ! nova_phase4c_compose up -d >/dev/null; then
-      nova_phase1_error "Could not start wg-easy from its persistent state."
+    # Recreate from the permanent Compose file so one-time INIT_* variables
+    # from an older container definition cannot survive in the runtime.
+    if ! nova_phase4c_compose up -d --force-recreate >/dev/null; then
+      nova_phase1_error "Could not recreate wg-easy from its persistent state."
       return 1
     fi
     nova_phase4c_verify_init_secret_removed "$password"
