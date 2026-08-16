@@ -99,9 +99,11 @@ nova_phase7_write_config() {
       '    - 192.168.0.193:5335' \
       '  upstream_mode: parallel' \
       '  fallback_dns: []' \
-      '  bootstrap_dns:' \
+      '  bootstrap_dns:'
+    printf '%s\n' \
       '    - 9.9.9.10' \
-      '    - 149.112.112.10' \
+      '    - 149.112.112.10'
+    printf '%s\n' \
       '  rewrites:' \
       '    - domain: arc.lan' \
       '      answer: 192.168.0.193' \
