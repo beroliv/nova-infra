@@ -128,22 +128,31 @@ nova_phase7_write_config() {
       '  rewrites:' \
       '    - domain: arc.lan' \
       '      answer: 192.168.0.193' \
+      '      enabled: true' \
       '    - domain: adguard-arc.lan' \
       '      answer: 192.168.0.193' \
+      '      enabled: true' \
       '    - domain: ds3.lan' \
       '      answer: 192.168.0.100' \
+      '      enabled: true' \
       '    - domain: syncthing-ds3.lan' \
       '      answer: 192.168.0.100' \
+      '      enabled: true' \
       '    - domain: nova.lan' \
       '      answer: 192.168.0.195' \
+      '      enabled: true' \
       '    - domain: vault.lan' \
       '      answer: 192.168.0.195' \
+      '      enabled: true' \
       '    - domain: adguard-nova.lan' \
       '      answer: 192.168.0.195' \
+      '      enabled: true' \
       '    - domain: syncthing-nova.lan' \
       '      answer: 192.168.0.195' \
+      '      enabled: true' \
       '    - domain: wg-easy.lan' \
       '      answer: 192.168.0.195' \
+      '      enabled: true' \
       '  rewrites_enabled: true' \
       'dhcp:' \
       '  enabled: false'
