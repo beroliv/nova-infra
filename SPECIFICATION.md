@@ -815,7 +815,8 @@ grundsätzlich erhalten:
 | Hostname | Backend | TLS | Besonderheit |
 | --- | --- | --- | --- |
 | `vault.lan` | `vaultwarden:80` | internal | HTTP wird auf HTTPS umgeleitet |
-| `adguard-nova.lan` | `192.168.0.195:3000` | internal | AdGuard Home auf Nova |
+| `wg-easy.lan` | `192.168.0.195:51821` | internal | wg-easy-Weboberfläche auf Nova |
+| `adguard-nova.lan` | `192.168.0.195:80` | internal | AdGuard Home auf Nova |
 | `adguard-arc.lan` | `192.168.0.193:80` | internal | AdGuard Home auf Arc |
 | `ds3.lan` | `192.168.0.100:5000` | internal | DSM auf `Diskstation3` |
 | `syncthing-ds3.lan` | `192.168.0.100:8384` | internal | Syncthing auf `Diskstation3` |

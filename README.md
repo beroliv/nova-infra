@@ -145,6 +145,12 @@ Unbound noch die Host-Firewallpolitik. Hauptversionswechsel von wg-easy bleiben
 manuell; Watchtower oder andere automatische Container-Updater werden nicht
 installiert.
 
+Phase 6 ergänzt die interne HTTPS-Caddyfile der bestehenden
+`vaultwarden-appliance` um die Nova-Hosts `wg-easy.lan`, `adguard-nova.lan`,
+`adguard-arc.lan`, `ds3.lan`, `syncthing-ds3.lan` und `syncthing-nova.lan` mit
+`tls internal`. Es wird kein zweiter Caddy gestartet; die Appliance-Caddyfile
+und ihre CA-Daten bleiben maßgeblich. Die Ergänzung ist markiert und idempotent.
+
 Der endgültige curl-Einstieg wird erst mit der weiteren Installer-Orchestrierung
 bereitgestellt; die implementierten Phasen werden derzeit aus einem
 Repository-Checkout gestartet:
