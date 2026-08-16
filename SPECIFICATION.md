@@ -255,12 +255,14 @@ Atlas-Einträge werden entfernt.
 #### 4.1.1 Installation und Aufgaben
 
 - Produktive Referenzversion: AdGuard Home v0.107.78
-- Native Installation unter `/opt/AdGuardHome`
-- systemd-Service: `AdGuardHome.service`
+- Docker-Installation mit dem offiziellen Image `adguard/adguardhome:v0.107.78`
+- Compose-Projekt unter `/opt/adguard`
+- `network_mode: host`
+- Persistente Daten unter `/opt/adguard/conf` und `/opt/adguard/work`
 - Produktive Referenzkonfiguration:
   `/opt/AdGuardHome/AdGuardHome.yaml`
 - DNS: TCP/UDP Port 53
-- Weboberfläche: Port 3000
+- Weboberfläche: Port 80
 - DHCP: deaktiviert
 - AdGuard-eigener DNS-Cache: bewusst deaktiviert
 - DNSSEC in AdGuard: deaktiviert
@@ -361,8 +363,10 @@ Infrastrukturzustands und müssen beim Neuaufbau nicht restauriert werden:
 
 #### 4.1.6 Konfigurationsstrategie
 
-Die bestehende `/opt/AdGuardHome/AdGuardHome.yaml` dient als Referenz für den
-späteren reproduzierbaren Sollzustand. Dabei gelten folgende Vorgaben:
+Die bestehende produktive `/opt/AdGuardHome/AdGuardHome.yaml` dient nur als
+Referenz. Der spätere Docker-Sollzustand wird als saubere Konfiguration unter
+`/opt/adguard/conf/AdGuardHome.yaml` erzeugt und nicht blind kopiert. Dabei gelten
+folgende Vorgaben:
 
 - bewährte DNS- und Filterparameter erhalten
 - Atlas-Einträge entfernen

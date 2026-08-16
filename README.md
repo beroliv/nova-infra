@@ -151,6 +151,12 @@ Phase 6 ergänzt die interne HTTPS-Caddyfile der bestehenden
 `tls internal`. Es wird kein zweiter Caddy gestartet; die Appliance-Caddyfile
 und ihre CA-Daten bleiben maßgeblich. Die Ergänzung ist markiert und idempotent.
 
+Phase 7 stellt AdGuard Home als offiziellen Docker-Container unter `/opt/adguard`
+mit `network_mode: host` bereit. Die Konfiguration nutzt den nativen Nova-
+Unbound auf `127.0.0.1:5335`, die dokumentierten internen Upstreams und die
+persistenten Verzeichnisse `conf` und `work`. Caddy und Unbound werden in dieser
+Phase nicht verändert.
+
 Der endgültige curl-Einstieg wird erst mit der weiteren Installer-Orchestrierung
 bereitgestellt; die implementierten Phasen werden derzeit aus einem
 Repository-Checkout gestartet:

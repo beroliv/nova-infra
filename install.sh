@@ -21,8 +21,10 @@ source "${NOVA_INSTALLER_DIR}/lib/phase4c.sh"
 source "${NOVA_INSTALLER_DIR}/lib/phase5.sh"
 # shellcheck source=lib/phase6.sh
 source "${NOVA_INSTALLER_DIR}/lib/phase6.sh"
+# shellcheck source=lib/phase7.sh
+source "${NOVA_INSTALLER_DIR}/lib/phase7.sh"
 
-readonly NOVA_INSTALL_PHASES="${NOVA_INSTALL_PHASES:-6}"
+readonly NOVA_INSTALL_PHASES="${NOVA_INSTALL_PHASES:-7}"
 if [[ "$NOVA_INSTALL_PHASES" != "1" \
   && "$NOVA_INSTALL_PHASES" != "2" \
   && "$NOVA_INSTALL_PHASES" != "3" \
@@ -30,8 +32,9 @@ if [[ "$NOVA_INSTALL_PHASES" != "1" \
   && "$NOVA_INSTALL_PHASES" != "4b" \
   && "$NOVA_INSTALL_PHASES" != "4c" \
   && "$NOVA_INSTALL_PHASES" != "5" \
-  && "$NOVA_INSTALL_PHASES" != "6" ]]; then
-  nova_phase1_error "NOVA_INSTALL_PHASES must be 1, 2, 3, 4a, 4b, 4c, 5, or 6."
+  && "$NOVA_INSTALL_PHASES" != "6" \
+  && "$NOVA_INSTALL_PHASES" != "7" ]]; then
+  nova_phase1_error "NOVA_INSTALL_PHASES must be 1, 2, 3, 4a, 4b, 4c, 5, 6, or 7."
   exit 2
 fi
 
@@ -42,7 +45,8 @@ if [[ "$NOVA_INSTALL_PHASES" == "2" \
   || "$NOVA_INSTALL_PHASES" == "4b" \
   || "$NOVA_INSTALL_PHASES" == "4c" \
   || "$NOVA_INSTALL_PHASES" == "5" \
-  || "$NOVA_INSTALL_PHASES" == "6" ]]; then
+  || "$NOVA_INSTALL_PHASES" == "6" \
+  || "$NOVA_INSTALL_PHASES" == "7" ]]; then
   nova_phase2_main
 fi
 if [[ "$NOVA_INSTALL_PHASES" == "3" \
@@ -50,20 +54,22 @@ if [[ "$NOVA_INSTALL_PHASES" == "3" \
   || "$NOVA_INSTALL_PHASES" == "4b" \
   || "$NOVA_INSTALL_PHASES" == "4c" \
   || "$NOVA_INSTALL_PHASES" == "5" \
-  || "$NOVA_INSTALL_PHASES" == "6" ]]; then
+  || "$NOVA_INSTALL_PHASES" == "6" \
+  || "$NOVA_INSTALL_PHASES" == "7" ]]; then
   nova_phase3_main
 fi
 if [[ "$NOVA_INSTALL_PHASES" == "4a" \
   || "$NOVA_INSTALL_PHASES" == "4b" \
   || "$NOVA_INSTALL_PHASES" == "4c" \
   || "$NOVA_INSTALL_PHASES" == "5" \
-  || "$NOVA_INSTALL_PHASES" == "6" ]]; then
+  || "$NOVA_INSTALL_PHASES" == "6" \
+  || "$NOVA_INSTALL_PHASES" == "7" ]]; then
   nova_phase4a_main
 fi
-if [[ "$NOVA_INSTALL_PHASES" == "4b" || "$NOVA_INSTALL_PHASES" == "4c" || "$NOVA_INSTALL_PHASES" == "5" || "$NOVA_INSTALL_PHASES" == "6" ]]; then
+if [[ "$NOVA_INSTALL_PHASES" == "4b" || "$NOVA_INSTALL_PHASES" == "4c" || "$NOVA_INSTALL_PHASES" == "5" || "$NOVA_INSTALL_PHASES" == "6" || "$NOVA_INSTALL_PHASES" == "7" ]]; then
   nova_phase4b_main
 fi
-if [[ "$NOVA_INSTALL_PHASES" == "4c" || "$NOVA_INSTALL_PHASES" == "5" || "$NOVA_INSTALL_PHASES" == "6" ]]; then
+if [[ "$NOVA_INSTALL_PHASES" == "4c" || "$NOVA_INSTALL_PHASES" == "5" || "$NOVA_INSTALL_PHASES" == "6" || "$NOVA_INSTALL_PHASES" == "7" ]]; then
   nova_phase4c_main
 fi
 if [[ "$NOVA_INSTALL_PHASES" == "5" ]]; then
@@ -72,4 +78,9 @@ fi
 if [[ "$NOVA_INSTALL_PHASES" == "6" ]]; then
   nova_phase5_main
   nova_phase6_main
+fi
+if [[ "$NOVA_INSTALL_PHASES" == "7" ]]; then
+  nova_phase5_main
+  nova_phase6_main
+  nova_phase7_main
 fi
