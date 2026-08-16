@@ -106,23 +106,6 @@ nova_phase7_write_config() {
       '    - 9.9.9.10' \
       '    - 149.112.112.10'
     printf '%s\n' \
-      '  rewrites:' \
-      '    - domain: arc.lan' \
-      '      answer: 192.168.0.193' \
-      '    - domain: ds3.lan' \
-      '      answer: 192.168.0.195' \
-      '    - domain: adguard-nova.lan' \
-      '      answer: 192.168.0.195' \
-      '    - domain: adguard-arc.lan' \
-      '      answer: 192.168.0.195' \
-      '    - domain: vault.lan' \
-      '      answer: 192.168.0.195' \
-      '    - domain: nova.lan' \
-      '      answer: 192.168.0.195' \
-      '    - domain: syncthing-nova.lan' \
-      '      answer: 192.168.0.195' \
-      '    - domain: syncthing-ds3.lan' \
-      '      answer: 192.168.0.195' \
       '  filters:' \
       '    - enabled: true' \
       '      url: https://filters.adtidy.org/extension/ublock/filters/2.txt' \
@@ -141,6 +124,27 @@ nova_phase7_write_config() {
       '      name: HaGeZi Allowlist Referral' \
       '      id: 4' \
       '  user_rules: []' \
+      'filtering:' \
+      '  rewrites:' \
+      '    - domain: arc.lan' \
+      '      answer: 192.168.0.193' \
+      '    - domain: adguard-arc.lan' \
+      '      answer: 192.168.0.193' \
+      '    - domain: ds3.lan' \
+      '      answer: 192.168.0.100' \
+      '    - domain: syncthing-ds3.lan' \
+      '      answer: 192.168.0.100' \
+      '    - domain: nova.lan' \
+      '      answer: 192.168.0.195' \
+      '    - domain: vault.lan' \
+      '      answer: 192.168.0.195' \
+      '    - domain: adguard-nova.lan' \
+      '      answer: 192.168.0.195' \
+      '    - domain: syncthing-nova.lan' \
+      '      answer: 192.168.0.195' \
+      '    - domain: wg-easy.lan' \
+      '      answer: 192.168.0.195' \
+      '  rewrites_enabled: true' \
       'dhcp:' \
       '  enabled: false'
   } > "$temporary_file"
