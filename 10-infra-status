@@ -114,12 +114,12 @@ if have_cmd docker; then
   docker info >/dev/null 2>&1 && DOCKER_READY=1
   if [ "$DOCKER_READY" -eq 1 ]; then
     for name in "${EXPECTED_CONTAINERS[@]}"; do
-      state="$(docker inspect -f '{{.State.Status}}|{{.Status}}' "$name" 2>/dev/null || true)"
+      state="$(docker ps -a --filter "name=^/${name}$" --format '{{.State}}|{{.Status}}' | head -n1)"
       [ "${state%%|*}" = "running" ] && RUNNING=$((RUNNING + 1))
     done
     echo "  Containers: ${RUNNING}/6 running"
     for name in "${EXPECTED_CONTAINERS[@]}"; do
-      state="$(docker inspect -f '{{.State.Status}}|{{.Status}}' "$name" 2>/dev/null || true)"
+      state="$(docker ps -a --filter "name=^/${name}$" --format '{{.State}}|{{.Status}}' | head -n1)"
       if [ -z "$state" ]; then
         printf "   %s○%s %-22s %s%s%s\n" "$C_DIM" "$C_RESET" "$name" "$C_DIM" "not present" "$C_RESET"
       else
