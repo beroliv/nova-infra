@@ -180,6 +180,12 @@ Sicherheitsupdates. Dafür werden `unattended-upgrades.service` sowie die
 periodische APT-Konfiguration aktiviert; eigene Mail- oder Reporting-Logik wird
 nicht ergänzt.
 
+Phase 12 installiert `/usr/local/bin/dup`. Der Helper aktualisiert die vier
+verwalteten Compose-Stacks (`/opt/vaultwarden`, `/opt/wg-easy`, `/opt/adguard`,
+`/opt/prusa`) und führt erst nach erfolgreicher Aktualisierung aller vorhandenen
+Stacks `docker image prune -a -f` aus. Native Dienste und persistente Daten werden
+nicht verändert.
+
 Der endgültige curl-Einstieg wird erst mit der weiteren Installer-Orchestrierung
 bereitgestellt; die implementierten Phasen werden derzeit aus einem
 Repository-Checkout gestartet:

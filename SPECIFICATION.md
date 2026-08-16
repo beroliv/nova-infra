@@ -1366,6 +1366,16 @@ Phase 11 aktiviert die Debian-Standardmechanismen für `unattended-upgrades`.
 `/etc/apt/apt.conf.d/20auto-upgrades` aktiviert. Es gibt keine eigene Mail-,
 Reporting- oder Update-Orchestrierung.
 
+### 10.10 Container-Update-Helper
+
+Phase 12 installiert den ausführbaren, von `root:root` besessenen Helper
+`/usr/local/bin/dup`. Er verarbeitet ausschließlich die Compose-Stacks unter
+`/opt/vaultwarden`, `/opt/wg-easy`, `/opt/adguard` und `/opt/prusa`, führt je
+Stack `docker compose pull` und `docker compose up -d` aus und bricht bei einem
+Fehler sofort ab. `docker image prune -a -f` läuft nur nach erfolgreicher
+Verarbeitung aller vorhandenen Stacks; `docker system prune`, Volume-Löschungen,
+native Service-Updates und APT-Aktionen sind ausgeschlossen.
+
 ## 11. Secrets und Disaster Recovery
 
 ### 11.1 Grundprinzip und Repository-Regeln

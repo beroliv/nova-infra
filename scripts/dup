@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+ORIGINAL_DIRECTORY="$PWD"
+restore_directory() {
+  cd -- "$ORIGINAL_DIRECTORY" || true
+}
+trap restore_directory EXIT
+
+stacks=(/opt/vaultwarden /opt/wg-easy /opt/adguard /opt/prusa)
+
+for stack in "${stacks[@]}"; do
+  if [[ -f "${stack}/compose.yml" ]]; then
+    compose_file="compose.yml"
+  elif [[ -f "${stack}/docker-compose.yml" ]]; then
+    compose_file="docker-compose.yml"
+  else
+    printf '[INFO] Skipping %s (no Compose file).\n' "$stack"
+    continue
+  fi
+
+  printf '[INFO] Updating %s.\n' "$stack"
+  if ! (
+    cd -- "$stack"
+    docker compose -f "$compose_file" pull
+    docker compose -f "$compose_file" up -d
+  ); then
+    printf '[ERROR] Compose update failed for %s.\n' "$stack" >&2
+    exit 1
+  fi
+done
+
+printf '[INFO] Removing unused Docker images.\n'
+docker image prune -a -f
