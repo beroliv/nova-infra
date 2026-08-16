@@ -81,6 +81,7 @@ nova_phase7_write_config() {
   temporary_file="$(mktemp "${config}.candidate.XXXXXX")"
   {
     printf '%s\n' '# nova-infra-managed AdGuard Home configuration'
+    printf '%s\n' 'schema_version: 34'
     printf '%s\n' 'http:' '  address: 0.0.0.0:80'
     printf '%s\n' 'users:' '  - name: admin'
     printf '    password: %s\n' "$password_hash"
