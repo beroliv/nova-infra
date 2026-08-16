@@ -120,10 +120,10 @@ fi
 if [[ "$NOVA_INSTALL_PHASES" == "9" || "$NOVA_INSTALL_PHASES" == "10" || "$NOVA_INSTALL_PHASES" == "11" || "$NOVA_INSTALL_PHASES" == "12" ]]; then
   nova_phase9_main
 fi
-if [[ "$NOVA_INSTALL_PHASES" == "10" || "$NOVA_INSTALL_PHASES" == "11" ]]; then
+if [[ "$NOVA_INSTALL_PHASES" == "10" || "$NOVA_INSTALL_PHASES" == "11" || "$NOVA_INSTALL_PHASES" == "12" ]]; then
   nova_phase10_main
 fi
-if [[ "$NOVA_INSTALL_PHASES" == "11" ]]; then
+if [[ "$NOVA_INSTALL_PHASES" == "11" || "$NOVA_INSTALL_PHASES" == "12" ]]; then
   nova_phase11_main
 fi
 if [[ "$NOVA_INSTALL_PHASES" == "12" ]]; then
