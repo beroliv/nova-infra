@@ -114,7 +114,7 @@ fi
 if [[ "$NOVA_INSTALL_PHASES" == "9" ]]; then
   nova_phase9_main
 fi
-if [[ "$NOVA_INSTALL_PHASES" == "10" ]]; then
+if [[ "$NOVA_INSTALL_PHASES" == "10" || "$NOVA_INSTALL_PHASES" == "11" ]]; then
   nova_phase10_main
 fi
 if [[ "$NOVA_INSTALL_PHASES" == "11" ]]; then
