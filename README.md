@@ -126,8 +126,8 @@ bereit:
 
 - Docker-Image `ghcr.io/wg-easy/wg-easy:15` und fester Containername `wg-easy`
 - WireGuard über den extern erreichbaren UDP-Port `51824`
-- Weboberfläche ausschließlich über `127.0.0.1:51821`; die spätere interne
-  Caddy-HTTPS-Integration bleibt einer eigenen Phase vorbehalten
+- Weboberfläche über `0.0.0.0:51821`; eine Weiterleitung ins Internet wird nicht
+  eingerichtet und bleibt durch die externe Router-Konfiguration verhindert
 - persistente Daten unter `/opt/wg-easy/data` und eine secret-freie
   `/opt/wg-easy/compose.yml`
 - unattended Erstinitialisierung als `admin` mit `WG_EASY_PASSWORD`, Endpoint

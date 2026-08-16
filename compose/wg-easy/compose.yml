@@ -13,7 +13,7 @@ services:
       - "/lib/modules:/lib/modules:ro"
     ports:
       - "0.0.0.0:51824:51824/udp"
-      - "127.0.0.1:51821:51821/tcp"
+      - "0.0.0.0:51821:51821/tcp"
     cap_add:
       - NET_ADMIN
       - SYS_MODULE

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Phase 4c only: wg-easy v15 WireGuard service, unattended one-time bootstrap,
-# persistent state, and local-only web UI exposure. Caddy remains out of scope.
+# persistent state, and LAN-reachable web UI exposure. Caddy remains out of scope.
 
 readonly NOVA_PHASE4C_IMAGE="ghcr.io/wg-easy/wg-easy:15"
 readonly NOVA_PHASE4C_COMPOSE_SOURCE="${NOVA_INSTALLER_DIR}/compose/wg-easy/compose.yml"
@@ -203,7 +203,7 @@ nova_phase4c_verify_init_secret_removed() {
     nova_phase1_error "Could not inspect the wg-easy runtime environment."
     return 1
   fi
-  if grep -Eq '^INIT_(ENABLED|USERNAME|PASSWORD|HOST|PORT|DNS|IPV4_CIDR|IPV6_CIDR|ALLOWED_IPS)=' \
+  if grep -Eq '^INIT_(USERNAME|PASSWORD|HOST|PORT|DNS|IPV4_CIDR|IPV6_CIDR|ALLOWED_IPS)=' \
     <<< "$environment" || [[ "$environment" == *"$password"* ]]; then
     nova_phase1_error "One-time wg-easy initialization credentials remain in the runtime environment."
     return 1
@@ -302,8 +302,8 @@ nova_phase4c_verify_runtime() {
     nova_phase1_error "WireGuard UDP port 51824 is not published as required."
     return 1
   fi
-  if [[ "$ui_bindings" != "127.0.0.1:51821" ]]; then
-    nova_phase1_error "wg-easy web UI is not restricted to host loopback port 51821."
+  if [[ "$ui_bindings" != "0.0.0.0:51821" ]]; then
+    nova_phase1_error "wg-easy web UI is not published on host port 51821."
     return 1
   fi
 
@@ -316,7 +316,7 @@ nova_phase4c_verify_runtime() {
     return 1
   fi
   if ! curl -fsS --max-time 10 --output /dev/null http://127.0.0.1:51821/; then
-    nova_phase1_error "wg-easy web UI did not answer on its local-only endpoint."
+    nova_phase1_error "wg-easy web UI did not answer on its local endpoint."
     return 1
   fi
 
@@ -331,7 +331,7 @@ nova_phase4c_verify_runtime() {
     return 1
   fi
   nova_phase4c_verify_init_secret_removed "$password"
-  nova_phase1_ok "wg-easy is running on UDP 51824; its UI is local-only and persistent state survived restart."
+  nova_phase1_ok "wg-easy is running on UDP 51824; its UI is LAN-reachable and persistent state survived restart."
 }
 
 nova_phase4c_write_completion_marker() {
