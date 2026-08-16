@@ -17,15 +17,18 @@ source "${NOVA_INSTALLER_DIR}/lib/phase4a.sh"
 source "${NOVA_INSTALLER_DIR}/lib/phase4b.sh"
 # shellcheck source=lib/phase4c.sh
 source "${NOVA_INSTALLER_DIR}/lib/phase4c.sh"
+# shellcheck source=lib/phase5.sh
+source "${NOVA_INSTALLER_DIR}/lib/phase5.sh"
 
-readonly NOVA_INSTALL_PHASES="${NOVA_INSTALL_PHASES:-4c}"
+readonly NOVA_INSTALL_PHASES="${NOVA_INSTALL_PHASES:-5}"
 if [[ "$NOVA_INSTALL_PHASES" != "1" \
   && "$NOVA_INSTALL_PHASES" != "2" \
   && "$NOVA_INSTALL_PHASES" != "3" \
   && "$NOVA_INSTALL_PHASES" != "4a" \
   && "$NOVA_INSTALL_PHASES" != "4b" \
-  && "$NOVA_INSTALL_PHASES" != "4c" ]]; then
-  nova_phase1_error "NOVA_INSTALL_PHASES must be 1, 2, 3, 4a, 4b, or 4c."
+  && "$NOVA_INSTALL_PHASES" != "4c" \
+  && "$NOVA_INSTALL_PHASES" != "5" ]]; then
+  nova_phase1_error "NOVA_INSTALL_PHASES must be 1, 2, 3, 4a, 4b, 4c, or 5."
   exit 2
 fi
 
@@ -34,23 +37,29 @@ if [[ "$NOVA_INSTALL_PHASES" == "2" \
   || "$NOVA_INSTALL_PHASES" == "3" \
   || "$NOVA_INSTALL_PHASES" == "4a" \
   || "$NOVA_INSTALL_PHASES" == "4b" \
-  || "$NOVA_INSTALL_PHASES" == "4c" ]]; then
+  || "$NOVA_INSTALL_PHASES" == "4c" \
+  || "$NOVA_INSTALL_PHASES" == "5" ]]; then
   nova_phase2_main
 fi
 if [[ "$NOVA_INSTALL_PHASES" == "3" \
   || "$NOVA_INSTALL_PHASES" == "4a" \
   || "$NOVA_INSTALL_PHASES" == "4b" \
-  || "$NOVA_INSTALL_PHASES" == "4c" ]]; then
+  || "$NOVA_INSTALL_PHASES" == "4c" \
+  || "$NOVA_INSTALL_PHASES" == "5" ]]; then
   nova_phase3_main
 fi
 if [[ "$NOVA_INSTALL_PHASES" == "4a" \
   || "$NOVA_INSTALL_PHASES" == "4b" \
-  || "$NOVA_INSTALL_PHASES" == "4c" ]]; then
+  || "$NOVA_INSTALL_PHASES" == "4c" \
+  || "$NOVA_INSTALL_PHASES" == "5" ]]; then
   nova_phase4a_main
 fi
-if [[ "$NOVA_INSTALL_PHASES" == "4b" || "$NOVA_INSTALL_PHASES" == "4c" ]]; then
+if [[ "$NOVA_INSTALL_PHASES" == "4b" || "$NOVA_INSTALL_PHASES" == "4c" || "$NOVA_INSTALL_PHASES" == "5" ]]; then
   nova_phase4b_main
 fi
-if [[ "$NOVA_INSTALL_PHASES" == "4c" ]]; then
+if [[ "$NOVA_INSTALL_PHASES" == "4c" || "$NOVA_INSTALL_PHASES" == "5" ]]; then
   nova_phase4c_main
+fi
+if [[ "$NOVA_INSTALL_PHASES" == "5" ]]; then
+  nova_phase5_main
 fi
