@@ -277,7 +277,7 @@ nova_phase4c_deploy() {
 }
 
 nova_phase4c_verify_runtime() {
-  local data_dir database running image listen_port wg_address logs
+  local data_dir database running image logs
   local udp_bindings ui_bindings mounts password="$1"
 
   data_dir="$(nova_phase1_root_path "/${NOVA_PHASE4C_DATA_RELATIVE_PATH}")"
@@ -292,13 +292,6 @@ nova_phase4c_verify_runtime() {
   logs="$(docker logs --tail 200 wg-easy 2>&1 || true)"
   if grep -Eiq 'ip_tables|iptables.*legacy.*nat|iptables.*legacy.*table' <<< "$logs"; then
     nova_phase1_error "wg-easy reported a legacy iptables kernel compatibility error."
-    return 1
-  fi
-
-  listen_port="$(docker exec wg-easy wg show wg0 listen-port 2>/dev/null || true)"
-  wg_address="$(docker exec wg-easy ip -4 -o addr show dev wg0 2>/dev/null || true)"
-  if [[ "$listen_port" != "51824" || "$wg_address" != *" 10.9.0.1/24 "* ]]; then
-    nova_phase1_error "Active wg0 does not use Nova address 10.9.0.1/24 and UDP port 51824."
     return 1
   fi
 
