@@ -1115,8 +1115,10 @@ Der Kamera-Container erhält einen festen `container_name`, damit der Monitor ni
 von automatisch erzeugten Compose-Namen abhängt. Als verbindlicher logischer Name
 wird `prusa-connect-rtsp` verwendet.
 
-**TODO:** Bei der späteren Implementierung die nicht geheimen Container-Parameter
-und den Netzwerkmodus anhand der Image-Anforderungen festlegen.
+Phase 9 legt die Compose-Dateien unter `/opt/prusa/` an. Der Upload-Container
+verwendet den festen Namen `prusa-connect-rtsp`; `CAMERA_URL` und `TOKEN` werden
+zur Laufzeit aus `/opt/nova-bootstrap/secrets.env` übergeben. Bei ungelösten
+Werten wird der Stack nicht gestartet und nur die Variablennamen werden gemeldet.
 
 ### 9.3 Ausschluss von MediaMTX
 
@@ -1152,6 +1154,11 @@ bewährte einfache Alpine-basierte Monitor-Lösung wird für Nova bevorzugt. Ein
 eigenes Watchdog-Image wird weder verlangt noch bevorzugt. Der Monitor bindet
 `/var/run/docker.sock` ein und verwendet `docker-cli`; die Watchdog-Logik bleibt
 absichtlich einfach.
+
+Phase 9 startet den Upload- und den Monitor-Container idempotent über Docker
+Compose. Der Monitor nutzt den festen Container-Namen, bindet
+`/var/run/docker.sock` ein und installiert zur Laufzeit `iputils` sowie
+`docker-cli`; ein eigenes Monitor-Image wird nicht gebaut.
 
 ### 9.5 Docker-Zugriff
 

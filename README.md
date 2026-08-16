@@ -164,6 +164,12 @@ und Konfiguration wird bei späteren Läufen nicht überschrieben. Der bestehend
 Vaultwarden-Backupordner `/opt/vaultwarden/backups` bleibt im Besitz der
 Appliance und wird über seine vorhandene Gruppenberechtigung für `admin` lesbar.
 
+Phase 9 stellt unter `/opt/prusa` den Prusa-Kamera-Stack per Docker Compose bereit:
+`prusa-connect-rtsp` verwendet das bestehende Kamera-Image, `prusa-monitor` ist
+ein einfacher Alpine-Container mit Docker-Socket und Ping-Überwachung. Bei
+`CHANGE_ME_*`-Werten für `CAMERA_URL` oder `TOKEN` bleibt der Stack gestoppt und
+nur die fehlenden Variablennamen werden gemeldet.
+
 Der endgültige curl-Einstieg wird erst mit der weiteren Installer-Orchestrierung
 bereitgestellt; die implementierten Phasen werden derzeit aus einem
 Repository-Checkout gestartet:
