@@ -59,7 +59,7 @@ nova_phase8_restore_config() {
       if ($0 ~ /id="ycffz-zhzw9"/) folder_id=1
       if ($0 ~ /label="Vaultwarden"/) folder_label=1
       if ($0 ~ /path="~\/backups\/vaultwarden"/ || $0 ~ /path="\/opt\/vaultwarden\/backups"/) {
-        sub(/path="[^"]*"/, "path=\"\/opt\/vaultwarden\/backups\"")
+        sub(/path="[^"]*"/, "path=\"/opt/vaultwarden/backups\"")
         folder_path=1
       }
     }
