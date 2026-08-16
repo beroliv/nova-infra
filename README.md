@@ -175,6 +175,11 @@ Phase 10 installiert das vorhandene Repository-Skript `10-infra-status` als
 Dienste sowie den Zustand der sechs erwarteten Docker-Container einschließlich
 gestoppter oder nicht vorhandener Container.
 
+Phase 11 aktiviert Debian-Standardmechanismen für automatische Paket- und
+Sicherheitsupdates. Dafür werden `unattended-upgrades.service` sowie die
+periodische APT-Konfiguration aktiviert; eigene Mail- oder Reporting-Logik wird
+nicht ergänzt.
+
 Der endgültige curl-Einstieg wird erst mit der weiteren Installer-Orchestrierung
 bereitgestellt; die implementierten Phasen werden derzeit aus einem
 Repository-Checkout gestartet:

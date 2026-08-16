@@ -1357,6 +1357,15 @@ Phase 10 installiert das bestehende Skript `10-infra-status` idempotent nach
 MOTD liest ausschließlich Zustände; es startet oder stoppt keine Dienste oder
 Container und führt keine Anwendungs-Healthchecks aus.
 
+### 10.9 Automatische Updates
+
+Phase 11 aktiviert die Debian-Standardmechanismen für `unattended-upgrades`.
+`unattended-upgrades.service` wird aktiviert und gestartet; zusätzlich werden
+`APT::Periodic::Update-Package-Lists` und
+`APT::Periodic::Unattended-Upgrade` in der standardmäßigen
+`/etc/apt/apt.conf.d/20auto-upgrades` aktiviert. Es gibt keine eigene Mail-,
+Reporting- oder Update-Orchestrierung.
+
 ## 11. Secrets und Disaster Recovery
 
 ### 11.1 Grundprinzip und Repository-Regeln
