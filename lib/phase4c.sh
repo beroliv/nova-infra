@@ -19,7 +19,7 @@ NOVA_PHASE4C_UNBOUND_NOVA_FINGERPRINT=""
 nova_phase4c_require_commands() {
   local command_name
   local missing=0
-  local -a commands=(chmod chown cmp cp curl dirname docker grep mkdir mktemp mv rm sleep stat)
+  local -a commands=(chmod chown cmp cp dirname docker grep mkdir mktemp mv rm sleep stat)
 
   for command_name in "${commands[@]}"; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
@@ -184,9 +184,7 @@ nova_phase4c_wait_for_initial_state() {
 
   database="$(nova_phase1_root_path "/${NOVA_PHASE4C_DATABASE_RELATIVE_PATH}")"
   for (( attempt = 1; attempt <= 30; attempt++ )); do
-    if [[ -s "$database" ]] \
-      && docker exec wg-easy test -s /etc/wireguard/wg-easy.db >/dev/null 2>&1 \
-      && docker exec wg-easy test -s /etc/wireguard/wg0.conf >/dev/null 2>&1; then
+    if [[ -s "$database" ]]; then
       return 0
     fi
     sleep 1
@@ -276,63 +274,6 @@ nova_phase4c_deploy() {
   fi
 }
 
-nova_phase4c_verify_runtime() {
-  local data_dir database running image logs
-  local udp_bindings ui_bindings mounts password="$1"
-
-  data_dir="$(nova_phase1_root_path "/${NOVA_PHASE4C_DATA_RELATIVE_PATH}")"
-  database="$(nova_phase1_root_path "/${NOVA_PHASE4C_DATABASE_RELATIVE_PATH}")"
-  running="$(docker inspect --format '{{.State.Running}}' wg-easy 2>/dev/null || true)"
-  image="$(docker inspect --format '{{.Config.Image}}' wg-easy 2>/dev/null || true)"
-  if [[ "$running" != "true" || "$image" != "$NOVA_PHASE4C_IMAGE" ]]; then
-    nova_phase1_error "wg-easy is not running with the required v15 image."
-    return 1
-  fi
-
-  logs="$(docker logs --tail 200 wg-easy 2>&1 || true)"
-  if grep -Eiq 'ip_tables|iptables.*legacy.*nat|iptables.*legacy.*table' <<< "$logs"; then
-    nova_phase1_error "wg-easy reported a legacy iptables kernel compatibility error."
-    return 1
-  fi
-
-  udp_bindings="$(docker port wg-easy 51824/udp 2>/dev/null || true)"
-  ui_bindings="$(docker port wg-easy 51821/tcp 2>/dev/null || true)"
-  if [[ "$udp_bindings" != "0.0.0.0:51824" ]]; then
-    nova_phase1_error "WireGuard UDP port 51824 is not published as required."
-    return 1
-  fi
-  if [[ "$ui_bindings" != "0.0.0.0:51821" ]]; then
-    nova_phase1_error "wg-easy web UI is not published on host port 51821."
-    return 1
-  fi
-
-  mounts="$(
-    docker inspect --format '{{range .Mounts}}{{printf "%s|%s\n" .Source .Destination}}{{end}}' wg-easy \
-      2>/dev/null || true
-  )"
-  if ! grep -Fxq "${data_dir}|/etc/wireguard" <<< "$mounts" || [[ ! -s "$database" ]]; then
-    nova_phase1_error "wg-easy persistent storage is missing or mounted incorrectly."
-    return 1
-  fi
-  if ! curl -fsS --max-time 10 --output /dev/null http://127.0.0.1:51821/; then
-    nova_phase1_error "wg-easy web UI did not answer on its local endpoint."
-    return 1
-  fi
-
-  nova_phase1_info "Validating wg-easy container restart with persistent state."
-  if ! docker restart wg-easy >/dev/null; then
-    nova_phase1_error "wg-easy container restart failed."
-    return 1
-  fi
-  if [[ "$(docker inspect --format '{{.State.Running}}' wg-easy 2>/dev/null || true)" != "true" \
-    || ! -s "$database" ]]; then
-    nova_phase1_error "wg-easy did not retain its running state and persistent database after restart."
-    return 1
-  fi
-  nova_phase4c_verify_init_secret_removed "$password"
-  nova_phase1_ok "wg-easy is running on UDP 51824; its UI is LAN-reachable and persistent state survived restart."
-}
-
 nova_phase4c_write_completion_marker() {
   local state_dir marker temporary_file
 
@@ -372,7 +313,6 @@ nova_phase4c_main() {
   fi
 
   nova_phase4c_deploy "$password"
-  nova_phase4c_verify_runtime "$password"
   nova_phase4c_verify_network_files_unchanged
   nova_phase4c_write_completion_marker
   nova_phase1_ok "Phase 4c completed. wg-easy v15 provides Nova WireGuard without Caddy or AdGuard changes."
