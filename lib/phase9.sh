@@ -5,6 +5,7 @@
 readonly NOVA_PHASE9_INSTALL_DIR_RELATIVE_PATH="opt/prusa"
 readonly NOVA_PHASE9_COMPOSE_RELATIVE_PATH="opt/prusa/compose.yml"
 readonly NOVA_PHASE9_MONITOR_RELATIVE_PATH="opt/prusa/monitor.sh"
+readonly NOVA_PHASE9_ENV_RELATIVE_PATH="opt/prusa/prusa.env"
 readonly NOVA_PHASE9_SECRETS_RELATIVE_PATH="opt/nova-bootstrap/secrets.env"
 readonly NOVA_PHASE9_CAMERA_IMAGE="jtee3d/prusa_connect_rtsp:latest"
 readonly NOVA_PHASE9_CAMERA_CONTAINER="prusa-connect-rtsp"
@@ -76,6 +77,28 @@ nova_phase9_write_monitor() {
   chown root:root -- "$monitor"
 }
 
+nova_phase9_write_env() {
+  local secrets_file env_file temporary_file camera_url token
+  secrets_file="$(nova_phase1_root_path "/${NOVA_PHASE9_SECRETS_RELATIVE_PATH}")"
+  env_file="$(nova_phase1_root_path "/${NOVA_PHASE9_ENV_RELATIVE_PATH}")"
+  camera_url="$(nova_phase1_read_assignment "$secrets_file" CAMERA_URL)"
+  token="$(nova_phase1_read_assignment "$secrets_file" TOKEN)"
+  temporary_file="$(mktemp "${env_file}.candidate.XXXXXX")"
+  {
+    printf 'RTSP_URLS=%s\n' "$camera_url"
+    printf 'TOKENS=%s\n' "$token"
+  } >"$temporary_file"
+  chmod 0600 -- "$temporary_file"
+  chown root:root -- "$temporary_file"
+  if [[ -f "$env_file" ]] && cmp -s -- "$temporary_file" "$env_file"; then
+    rm -f -- "$temporary_file"
+  else
+    mv -f -- "$temporary_file" "$env_file"
+  fi
+  chmod 0600 -- "$env_file"
+  chown root:root -- "$env_file"
+}
+
 nova_phase9_write_compose() {
   local compose temporary_file
   compose="$(nova_phase1_root_path "/${NOVA_PHASE9_COMPOSE_RELATIVE_PATH}")"
@@ -87,9 +110,9 @@ nova_phase9_write_compose() {
       '    image: jtee3d/prusa_connect_rtsp:latest' \
       '    container_name: prusa-connect-rtsp' \
       '    restart: unless-stopped' \
-      '    environment:' \
-      '      RTSP_URLS: "${CAMERA_URL}"' \
-      '      TOKENS: "${TOKEN}"' \
+      '    env_file:' \
+      '      - path: /opt/prusa/prusa.env' \
+      '        format: raw' \
       '  prusa-monitor:' \
       '    image: alpine:3.20' \
       '    container_name: prusa-monitor' \
@@ -114,16 +137,15 @@ nova_phase9_write_compose() {
 }
 
 nova_phase9_deploy() {
-  local install_dir compose secrets_file
+  local install_dir compose
   install_dir="$(nova_phase1_root_path "/${NOVA_PHASE9_INSTALL_DIR_RELATIVE_PATH}")"
   compose="$(nova_phase1_root_path "/${NOVA_PHASE9_COMPOSE_RELATIVE_PATH}")"
-  secrets_file="$(nova_phase1_root_path "/${NOVA_PHASE9_SECRETS_RELATIVE_PATH}")"
-  if ! docker compose --env-file "$secrets_file" --project-directory "$install_dir" -f "$compose" config --quiet; then
+  if ! docker compose --project-directory "$install_dir" -f "$compose" config --quiet; then
     nova_phase1_error "Prusa Docker Compose configuration is invalid."
     return 1
   fi
   nova_phase1_info "Starting the Prusa camera and monitor containers."
-  if ! docker compose --env-file "$secrets_file" --project-directory "$install_dir" -f "$compose" up -d; then
+  if ! docker compose --project-directory "$install_dir" -f "$compose" up -d; then
     nova_phase1_error "Prusa camera stack deployment failed."
     return 1
   fi
@@ -136,6 +158,7 @@ nova_phase9_main() {
   if ! nova_phase9_read_secrets; then
     return 0
   fi
+  nova_phase9_write_env
   nova_phase9_write_monitor
   nova_phase9_write_compose
   nova_phase9_deploy
