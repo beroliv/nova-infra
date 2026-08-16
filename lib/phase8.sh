@@ -153,6 +153,19 @@ nova_phase8_prepare_backup_access() {
   fi
 }
 
+nova_phase8_prepare_folder_marker() {
+  local backup_dir marker
+  backup_dir="$(nova_phase1_root_path "/${NOVA_PHASE8_BACKUP_RELATIVE_PATH}")"
+  marker="${backup_dir}/.stfolder"
+  if [[ -L "$marker" || ( -e "$marker" && ! -d "$marker" ) ]]; then
+    nova_phase1_error "Syncthing folder marker is not a safe directory."
+    return 1
+  fi
+  mkdir -p -- "$marker"
+  chown "${NOVA_PHASE8_USER}:${NOVA_PHASE8_USER}" -- "$marker"
+  chmod 0700 -- "$marker"
+}
+
 nova_phase8_main() {
   nova_phase1_info "Phase 8 Syncthing migration"
   nova_phase8_require_commands
@@ -164,6 +177,7 @@ nova_phase8_main() {
   chmod 0700 -- "$NOVA_PHASE8_STATE_DIR"
   nova_phase8_restore_state
   nova_phase8_prepare_backup_access
+  nova_phase8_prepare_folder_marker
   systemctl enable --now "$NOVA_PHASE8_SERVICE"
   nova_phase1_ok "Syncthing is enabled and started as syncthing@admin.service."
 }
