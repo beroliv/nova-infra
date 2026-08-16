@@ -71,76 +71,74 @@ if [ -n "$TEMP" ]; then
   echo "  Temp:    ${TCOLOR}${TEMP}°C${C_RESET}"
 fi
 
-# ---------- wireguard ----------
-echo
-echo "${C_RED}${C_BOLD}WireGuard${C_RESET}"
-if ip link show wg0 >/dev/null 2>&1; then
-  printf "  %s●%s %-24s %12s\n" "$C_GREEN" "$C_RESET" "wg0" "running"
-else
-  printf "  %s○%s %-24s %12s\n" "$C_RED" "$C_RESET" "wg0" "stopped"
-fi
-
 # ---------- services ----------
 echo
 echo "${C_RED}${C_BOLD}Services${C_RESET}"
 
-SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
-SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
-LIST_FILE="${SCRIPT_DIR}/services.list"
+for svc in unbound unattended-upgrades dyndns.timer syncthing@admin; do
 
-FOUND=0
-
-if [ -f "$LIST_FILE" ]; then
-  while IFS= read -r svc || [ -n "$svc" ]; do
-    svc="$(echo "$svc" | sed 's/#.*$//;s/^[[:space:]]*//;s/[[:space:]]*$//')"
-    [ -z "$svc" ] && continue
-    FOUND=1
-
-    # ---- timer ----
-    if [[ "$svc" == *.timer ]]; then
-      if systemctl list-unit-files "$svc" >/dev/null 2>&1; then
-        if systemctl is-enabled --quiet "$svc"; then
-          printf "  %s●%s %-24s %12s\n" "$C_GREEN" "$C_RESET" "$svc" "enabled"
-        else
-          printf "  %s○%s %-24s %12s\n" "$C_YELLOW" "$C_RESET" "$svc" "disabled"
-        fi
+  # ---- timer ----
+  if [[ "$svc" == *.timer ]]; then
+    if systemctl cat "$svc" >/dev/null 2>&1; then
+      if systemctl is-enabled --quiet "$svc"; then
+        printf "  %s●%s %-24s %12s\n" "$C_GREEN" "$C_RESET" "$svc" "enabled"
       else
-        printf "  %s○%s %-24s %12s\n" "$C_DIM" "$C_RESET" "$svc" "not installed"
+        printf "  %s○%s %-24s %12s\n" "$C_YELLOW" "$C_RESET" "$svc" "disabled"
       fi
-
-    # ---- normal service ----
     else
-      unit="${svc}.service"
-      if systemctl list-unit-files "$unit" >/dev/null 2>&1; then
-        if systemctl is-active --quiet "$unit"; then
-          printf "  %s●%s %-24s %12s\n" "$C_GREEN" "$C_RESET" "$svc" "running"
-        else
-          printf "  %s○%s %-24s %12s\n" "$C_YELLOW" "$C_RESET" "$svc" "stopped"
-        fi
-      else
-        printf "  %s○%s %-24s %12s\n" "$C_DIM" "$C_RESET" "$svc" "not installed"
-      fi
+      printf "  %s○%s %-24s %12s\n" "$C_DIM" "$C_RESET" "$svc" "not installed"
     fi
-  done < "$LIST_FILE"
-fi
 
-[ "$FOUND" -eq 0 ] && echo "  ${C_DIM}(no managed services detected)${C_RESET}"
+  # ---- normal service ----
+  else
+    unit="${svc}.service"
+    if systemctl cat "$unit" >/dev/null 2>&1; then
+      if systemctl is-active --quiet "$unit"; then
+        printf "  %s●%s %-24s %12s\n" "$C_GREEN" "$C_RESET" "$svc" "running"
+      else
+        printf "  %s○%s %-24s %12s\n" "$C_YELLOW" "$C_RESET" "$svc" "stopped"
+      fi
+    else
+      printf "  %s○%s %-24s %12s\n" "$C_DIM" "$C_RESET" "$svc" "not installed"
+    fi
+  fi
+done
 
 # ---------- docker ----------
-if have_cmd docker && docker info >/dev/null 2>&1; then
+if have_cmd docker; then
   echo
   echo "${C_RED}${C_BOLD}Docker${C_RESET}"
-  RUNNING="$(docker ps --format '{{.Names}}' | wc -l)"
-  echo "  Containers: ${RUNNING} running"
-
-  if [ "$RUNNING" -gt 0 ]; then
-    while IFS='|' read -r name status; do
-      printf "   %s●%s %-22s %s%s%s\n" \
-        "$C_GREEN" "$C_RESET" \
-        "$name" "$C_DIM" "$status" "$C_RESET"
-    done < <(docker ps --format '{{.Names}}|{{.Status}}')
+  EXPECTED_CONTAINERS=(prusa-monitor prusa-connect-rtsp adguardhome wg-easy caddy vaultwarden)
+  RUNNING=0
+  DOCKER_READY=0
+  docker info >/dev/null 2>&1 && DOCKER_READY=1
+  if [ "$DOCKER_READY" -eq 1 ]; then
+    for name in "${EXPECTED_CONTAINERS[@]}"; do
+      state="$(docker inspect -f '{{.State.Status}}|{{.Status}}' "$name" 2>/dev/null || true)"
+      [ "${state%%|*}" = "running" ] && RUNNING=$((RUNNING + 1))
+    done
+    echo "  Containers: ${RUNNING}/6 running"
+    for name in "${EXPECTED_CONTAINERS[@]}"; do
+      state="$(docker inspect -f '{{.State.Status}}|{{.Status}}' "$name" 2>/dev/null || true)"
+      if [ -z "$state" ]; then
+        printf "   %s○%s %-22s %s%s%s\n" "$C_DIM" "$C_RESET" "$name" "$C_DIM" "not present" "$C_RESET"
+      else
+        status="${state#*|}"
+        if [ "${state%%|*}" = "running" ]; then
+          printf "   %s●%s %-22s %s%s%s\n" "$C_GREEN" "$C_RESET" "$name" "$C_DIM" "$status" "$C_RESET"
+        else
+          printf "   %s○%s %-22s %s%s%s\n" "$C_RED" "$C_RESET" "$name" "$C_DIM" "$status" "$C_RESET"
+        fi
+      fi
+    done
+  else
+    echo "  Containers: 0/6 running (Docker unavailable)"
+    for name in "${EXPECTED_CONTAINERS[@]}"; do
+      printf "   %s○%s %-22s %s%s%s\n" "$C_DIM" "$C_RESET" "$name" "$C_DIM" "not available" "$C_RESET"
+    done
   fi
 fi
 
 # ---------- footer ----------
+echo "${C_DIM} Kernel:${C_RESET}   $(uname -r)"
 echo

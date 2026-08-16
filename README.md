@@ -170,6 +170,11 @@ ein einfacher Alpine-Container mit Docker-Socket und Ping-Überwachung. Bei
 `CHANGE_ME_*`-Werten für `CAMERA_URL` oder `TOKEN` bleibt der Stack gestoppt und
 nur die fehlenden Variablennamen werden gemeldet.
 
+Phase 10 installiert das vorhandene Repository-Skript `10-infra-status` als
+`/etc/update-motd.d/10-infra-status`. Es zeigt die vier relevanten nativen
+Dienste sowie den Zustand der sechs erwarteten Docker-Container einschließlich
+gestoppter oder nicht vorhandener Container.
+
 Der endgültige curl-Einstieg wird erst mit der weiteren Installer-Orchestrierung
 bereitgestellt; die implementierten Phasen werden derzeit aus einem
 Repository-Checkout gestartet:

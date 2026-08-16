@@ -1231,9 +1231,10 @@ Dekoration, sondern als schnelle Übersicht über den Zustand des Infrastructure
 Nodes. Innerhalb weniger Sekunden soll erkennbar sein, was Nova ist, wie es dem
 System geht und welche relevanten Dienste und Container aktuell laufen.
 
-Das MOTD wird neu implementiert. Das bestehende alte MOTD kann bei der späteren
-Umsetzung als Referenz oder Fallback herangezogen werden, falls die neue
-Implementierung keinen Vorteil bietet.
+Das MOTD wird in Phase 10 aus dem vorhandenen Repository-Skript
+`10-infra-status` installiert. Dieses Skript bleibt die maßgebliche Grundlage;
+die Phase ergänzt nur die für den aktuellen Nova-Stack erforderlichen Status-
+checks.
 
 ### 10.2 Kopfbereich
 
@@ -1273,20 +1274,12 @@ nativen beziehungsweise systemd-basierten Dienste kompakt an, beispielsweise
 `active`, `inactive` oder `failed`. Fehlerhafte Zustände müssen klar erkennbar
 sein.
 
-Nach aktuellem Stand gehören mindestens dazu:
+Die Phase prüft aktuell:
 
-- AdGuard Home
-- Unbound
-- Syncthing
-- DynDNS Timer
-- Vaultwarden Backup Timer
-
-Diese Liste ist ausdrücklich noch nicht vollständig. Die endgültige Liste wird
-erst nach Abschluss der gesamten Nova-Bestandsaufnahme anhand dieser Spezifikation
-festgelegt.
-
-**TODO:** Nach Abschluss der Nova-Bestandsaufnahme die endgültige Liste der
-relevanten nativen Dienste und Timer festlegen.
+- `unbound.service`
+- `unattended-upgrades.service`
+- `dyndns.timer`
+- `syncthing@admin.service`
 
 **TODO:** Für jeden Dienst festlegen, welche Zustände erwartet, informativ,
 warnungswürdig oder fehlerhaft sind. Insbesondere darf ein erwarteter inaktiver
@@ -1314,12 +1307,10 @@ Dabei gelten folgende Anforderungen:
 - Wenn Docker selbst nicht läuft, darf die Container-Abfrage das MOTD nicht
   abbrechen.
 
-Die Containerliste wird bis zum Abschluss der Nova-Bestandsaufnahme nicht auf
-eine heute fest kodierte Liste beschränkt. Nach aktuellem Stand sind unter anderem
-Vaultwarden, Caddy, wg-easy und später die Prusa-Komponenten relevant.
-
-**TODO:** Nach Abschluss der Nova-Bestandsaufnahme festlegen, ob und wie die
-relevanten Container dynamisch ausgewählt oder vollständig aufgelistet werden.
+Die erwartete Liste umfasst genau sechs Container: `prusa-monitor`,
+`prusa-connect-rtsp`, `adguardhome`, `wg-easy`, `caddy` und `vaultwarden`.
+Das MOTD zeigt `X/6` laufende Container und listet alle sechs einzeln, auch wenn
+ein Container gestoppt oder nicht vorhanden ist.
 
 ### 10.6 Verhalten und Robustheit
 
@@ -1359,15 +1350,12 @@ Containers
 Containername | Status | Laufzeit
 ```
 
-### 10.8 Spätere Implementierung
+### 10.8 Implementierung
 
-Als wahrscheinlicher Zielort ist `/etc/update-motd.d/10-nova-status` vorgesehen.
-Die endgültige Implementierung erfolgt jedoch erst nach Abschluss der gesamten
-Nova-Bestandsaufnahme, damit die Dienst- und Containerliste vollständig bestimmt
-werden kann. Bis dahin wird kein MOTD-Skript erstellt.
-
-**TODO:** Bestehende MOTD-Skripte, Ausgabe, Pfade und Statuslogik vom produktiven
-Nova als mögliche Referenz beziehungsweise Fallback auslesen.
+Phase 10 installiert das bestehende Skript `10-infra-status` idempotent nach
+`/etc/update-motd.d/10-infra-status` als `root:root` und ausführbare Datei. Das
+MOTD liest ausschließlich Zustände; es startet oder stoppt keine Dienste oder
+Container und führt keine Anwendungs-Healthchecks aus.
 
 ## 11. Secrets und Disaster Recovery
 
