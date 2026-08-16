@@ -1,0 +1,146 @@
+#!/bin/bash
+
+# ---------- colors ----------
+C_RESET=$'\e[0m'
+C_DIM=$'\e[2m'
+C_BOLD=$'\e[1m'
+C_CYAN=$'\e[36m'
+C_GREEN=$'\e[32m'
+C_YELLOW=$'\e[33m'
+C_RED=$'\e[31m'
+
+# ---------- helpers ----------
+have_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+# ---------- temperature ----------
+get_temp_c() {
+  if have_cmd vcgencmd; then
+    vcgencmd measure_temp | sed "s/temp=//;s/'C//"
+    return
+  fi
+  [ -r /sys/class/thermal/thermal_zone0/temp ] &&
+    awk '{printf "%.1f\n", $1/1000}' /sys/class/thermal/thermal_zone0/temp
+}
+
+to_tenths() {
+  local s="$1"
+  local ip="${s%%.*}"
+  local fp="0"
+  [[ "$s" == *.* ]] && fp="${s#*.}" && fp="${fp:0:1}"
+  ip="${ip//[^0-9]/}"
+  fp="${fp//[^0-9]/}"
+  echo $((10*ip + fp))
+}
+
+# ---------- header ----------
+echo
+echo "${C_CYAN}${C_BOLD}╭────────────────────────────────────────────╮${C_RESET}"
+printf "${C_CYAN}${C_BOLD}│ %-42s │${C_RESET}\n" "Raspberry Infrastructure Node"
+echo "${C_CYAN}${C_BOLD}╰────────────────────────────────────────────╯${C_RESET}"
+
+echo "${C_DIM} Host:${C_RESET}     $(hostname)"
+echo "${C_DIM} Owner:${C_RESET}    Oliver Bertrand"
+echo "${C_DIM} Managed:${C_RESET}  infra.git (manual changes discouraged)"
+
+# ---------- system ----------
+echo
+echo "${C_RED}${C_BOLD}System${C_RESET}"
+echo "  Uptime:  $(uptime -p)"
+echo "  Load:    $(cut -d' ' -f1-3 /proc/loadavg)"
+
+# ---------- resources ----------
+echo
+echo "${C_RED}${C_BOLD}Resources${C_RESET}"
+
+if have_cmd df; then
+  read -r TOTAL USED PCT <<<"$(df -h / | awk 'NR==2 {print $2, $3, $5}' | tr -d '%')"
+  DCOLOR="$C_GREEN"
+  [ "$PCT" -ge 90 ] && DCOLOR="$C_RED"
+  [ "$PCT" -ge 80 ] && [ "$PCT" -lt 90 ] && DCOLOR="$C_YELLOW"
+  echo "  Disk:    ${USED}/${TOTAL} (${DCOLOR}${PCT}%${C_RESET})"
+fi
+
+have_cmd free && echo "  RAM:     $(free -h | awk '/Mem:/ {print $3 "/" $2}')"
+
+TEMP="$(get_temp_c)"
+if [ -n "$TEMP" ]; then
+  T10="$(to_tenths "$TEMP")"
+  TCOLOR="$C_GREEN"
+  [ "$T10" -ge 750 ] && TCOLOR="$C_RED"
+  [ "$T10" -ge 600 ] && [ "$T10" -lt 750 ] && TCOLOR="$C_YELLOW"
+  echo "  Temp:    ${TCOLOR}${TEMP}°C${C_RESET}"
+fi
+
+# ---------- wireguard ----------
+echo
+echo "${C_RED}${C_BOLD}WireGuard${C_RESET}"
+if ip link show wg0 >/dev/null 2>&1; then
+  printf "  %s●%s %-24s %12s\n" "$C_GREEN" "$C_RESET" "wg0" "running"
+else
+  printf "  %s○%s %-24s %12s\n" "$C_RED" "$C_RESET" "wg0" "stopped"
+fi
+
+# ---------- services ----------
+echo
+echo "${C_RED}${C_BOLD}Services${C_RESET}"
+
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+LIST_FILE="${SCRIPT_DIR}/services.list"
+
+FOUND=0
+
+if [ -f "$LIST_FILE" ]; then
+  while IFS= read -r svc || [ -n "$svc" ]; do
+    svc="$(echo "$svc" | sed 's/#.*$//;s/^[[:space:]]*//;s/[[:space:]]*$//')"
+    [ -z "$svc" ] && continue
+    FOUND=1
+
+    # ---- timer ----
+    if [[ "$svc" == *.timer ]]; then
+      if systemctl list-unit-files "$svc" >/dev/null 2>&1; then
+        if systemctl is-enabled --quiet "$svc"; then
+          printf "  %s●%s %-24s %12s\n" "$C_GREEN" "$C_RESET" "$svc" "enabled"
+        else
+          printf "  %s○%s %-24s %12s\n" "$C_YELLOW" "$C_RESET" "$svc" "disabled"
+        fi
+      else
+        printf "  %s○%s %-24s %12s\n" "$C_DIM" "$C_RESET" "$svc" "not installed"
+      fi
+
+    # ---- normal service ----
+    else
+      unit="${svc}.service"
+      if systemctl list-unit-files "$unit" >/dev/null 2>&1; then
+        if systemctl is-active --quiet "$unit"; then
+          printf "  %s●%s %-24s %12s\n" "$C_GREEN" "$C_RESET" "$svc" "running"
+        else
+          printf "  %s○%s %-24s %12s\n" "$C_YELLOW" "$C_RESET" "$svc" "stopped"
+        fi
+      else
+        printf "  %s○%s %-24s %12s\n" "$C_DIM" "$C_RESET" "$svc" "not installed"
+      fi
+    fi
+  done < "$LIST_FILE"
+fi
+
+[ "$FOUND" -eq 0 ] && echo "  ${C_DIM}(no managed services detected)${C_RESET}"
+
+# ---------- docker ----------
+if have_cmd docker && docker info >/dev/null 2>&1; then
+  echo
+  echo "${C_RED}${C_BOLD}Docker${C_RESET}"
+  RUNNING="$(docker ps --format '{{.Names}}' | wc -l)"
+  echo "  Containers: ${RUNNING} running"
+
+  if [ "$RUNNING" -gt 0 ]; then
+    while IFS='|' read -r name status; do
+      printf "   %s●%s %-22s %s%s%s\n" \
+        "$C_GREEN" "$C_RESET" \
+        "$name" "$C_DIM" "$status" "$C_RESET"
+    done < <(docker ps --format '{{.Names}}|{{.Status}}')
+  fi
+fi
+
+# ---------- footer ----------
+echo
