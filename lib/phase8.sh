@@ -50,27 +50,34 @@ nova_phase8_restore_config() {
   local source_config="$1" temporary_config
   temporary_config="$(mktemp "${NOVA_PHASE8_STATE_DIR}/.config.xml.XXXXXX")"
   if ! awk '
-    BEGIN { in_folder=0; in_gui=0; path_matches=0; gui_matches=0 }
-    /<folder([[:space:]>]|$)/ { in_folder=1 }
-    in_folder && /<path>/ && ($0 ~ /vaultwarden|backups/) {
+    BEGIN { in_folder=0; folder_id=0; folder_label=0; folder_path=0; identified=0 }
+    /<folder([[:space:]>]|$)/ {
+      in_folder=1
+      folder_id=0
+      folder_label=0
+      folder_path=0
+      if ($0 ~ /id="ycffz-zhzw9"/) folder_id=1
+      if ($0 ~ /label="Vaultwarden"/) folder_label=1
+      if ($0 ~ /path="~\/backups\/vaultwarden"/ || $0 ~ /path="\/opt\/vaultwarden\/backups"/) {
+        sub(/path="[^"]*"/, "path=\"\/opt\/vaultwarden\/backups\"")
+        folder_path=1
+      }
+    }
+    in_folder && /<id>ycffz-zhzw9<\/id>/ { folder_id=1 }
+    in_folder && /<label>Vaultwarden<\/label>/ { folder_label=1 }
+    in_folder && /<path>/ && ($0 ~ /<path>~\/backups\/vaultwarden<\/path>/ || $0 ~ /<path>\/opt\/vaultwarden\/backups<\/path>/) {
       sub(/<path>[^<]*<\/path>/, "<path>/opt/vaultwarden/backups</path>")
-      path_matches++
-    }
-    /<gui([[:space:]>]|$)/ {
-      in_gui=1
-      sub(/tls="(true|false)"/, "tls=\"false\"")
-    }
-    in_gui && /<address>/ {
-      sub(/<address>[^<]*<\/address>/, "<address>0.0.0.0:8384</address>")
-      gui_matches++
+      folder_path=1
     }
     { print }
-    /<\/folder>/ { in_folder=0 }
-    /<\/gui>/ { in_gui=0 }
-    END { if (path_matches != 1 || gui_matches != 1) exit 42 }
+    /<\/folder>/ {
+      if (folder_id && folder_label && folder_path) identified++
+      in_folder=0
+    }
+    END { if (identified != 1) exit 42 }
   ' "$source_config" >"$temporary_config"; then
     rm -f -- "$temporary_config"
-    nova_phase1_error "Restored Syncthing config did not contain exactly one Vaultwarden path and GUI address."
+    nova_phase1_error "Restored Syncthing config did not contain exactly one identifiable Vaultwarden folder."
     return 1
   fi
   chmod 0600 -- "$temporary_config"
