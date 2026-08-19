@@ -84,19 +84,32 @@ nova_phase3_require_phase2() {
 }
 
 nova_phase3_validate_admin_user() {
-  local passwd_entry username password uid gid gecos home shell
+  local passwd_entry username password uid gid gecos home shell group_entry group_name group_gid groups
 
   if ! passwd_entry="$(getent passwd admin)"; then
     nova_phase1_error "Required target administrator account is missing: admin"
     return 1
   fi
   IFS=: read -r username password uid gid gecos home shell <<< "$passwd_entry"
-  if [[ "$username" != "admin" || "$uid" != "1000" || "$gid" != "1000" \
-    || "$home" != "/home/admin" || "$shell" != "/bin/bash" ]]; then
-    nova_phase1_error "The admin account does not match the required UID/GID 1000, home, and shell."
+  if [[ "$username" != "admin" || "$home" != "/home/admin" || "$shell" != "/bin/bash" ]]; then
+    nova_phase1_error "The admin account does not match the required home and shell."
     return 1
   fi
-  nova_phase1_ok "The admin account matches the specified target identity."
+  if ! group_entry="$(getent group admin)"; then
+    nova_phase1_error "Required primary group is missing: admin"
+    return 1
+  fi
+  IFS=: read -r group_name _ group_gid _ <<< "$group_entry"
+  if [[ "$group_name" != "admin" || "$group_gid" != "$gid" ]]; then
+    nova_phase1_error "The admin account primary group must be admin."
+    return 1
+  fi
+  groups="$(id -nG admin)"
+  if ! grep -Eq '(^|[[:space:]])sudo([[:space:]]|$)' <<< "$groups"; then
+    nova_phase1_error "The admin account must have sudo access through the sudo group."
+    return 1
+  fi
+  nova_phase1_ok "The admin account matches the required home, shell, primary group, and sudo access; existing UID/GID preserved."
 }
 
 nova_phase3_check_incompatible_installations() {
