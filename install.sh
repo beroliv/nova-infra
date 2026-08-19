@@ -15,8 +15,23 @@ nova_bootstrap_checkout() {
     exit 1
   fi
   if ! command -v git >/dev/null 2>&1; then
-    printf '[ERROR] Git is required for the curl bootstrap but is not installed.\n' >&2
-    exit 1
+    if ! command -v apt-get >/dev/null 2>&1; then
+      printf '[ERROR] Git is missing and apt-get is unavailable for bootstrap installation.\n' >&2
+      exit 1
+    fi
+    printf '[INFO] Git is missing; installing it with the standard APT mechanism.\n'
+    if ! DEBIAN_FRONTEND=noninteractive apt-get update; then
+      printf '[ERROR] Could not update APT metadata for the bootstrap Git installation.\n' >&2
+      exit 1
+    fi
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y git; then
+      printf '[ERROR] Could not install Git for the bootstrap checkout.\n' >&2
+      exit 1
+    fi
+    if ! command -v git >/dev/null 2>&1; then
+      printf '[ERROR] Git is still unavailable after bootstrap installation.\n' >&2
+      exit 1
+    fi
   fi
   if [[ -L "$checkout" || ( -e "$checkout" && ! -d "$checkout" ) ]]; then
     printf '[ERROR] Bootstrap checkout path is not a safe directory: %s\n' "$checkout" >&2
