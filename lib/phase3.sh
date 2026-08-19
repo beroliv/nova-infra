@@ -18,7 +18,6 @@ readonly -a NOVA_PHASE3_INCOMPATIBLE_PACKAGES=(
   "docker-doc"
   "docker.io"
   "podman-docker"
-  "runc"
 )
 readonly NOVA_PHASE3_DOCKER_REPOSITORY_URL="https://download.docker.com/linux/debian"
 readonly NOVA_PHASE3_MARKER_RELATIVE_PATH="var/lib/nova-infra/phase3-complete"
@@ -32,7 +31,7 @@ NOVA_PHASE3_ADMIN_GROUP_CHANGED=0
 nova_phase3_require_commands() {
   local command_name
   local missing=0
-  local -a commands=(apt-cache apt-get dpkg-query find getent grep id systemctl usermod)
+  local -a commands=(apt-cache apt-get dpkg dpkg-query find getent grep id systemctl usermod)
 
   for command_name in "${commands[@]}"; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
@@ -81,6 +80,27 @@ nova_phase3_require_phase2() {
 
   nova_phase2_check_repository_duplicates
   nova_phase1_ok "Phase 2 marker and official Docker repository definition are present."
+}
+
+nova_phase3_repair_package_state() {
+  local audit_output
+
+  audit_output="$(dpkg --audit 2>/dev/null || true)"
+  if [[ -n "$audit_output" ]]; then
+    nova_phase1_info "Repairing interrupted Debian package configuration."
+    if ! DEBIAN_FRONTEND=noninteractive dpkg --configure -a; then
+      nova_phase1_error "dpkg --configure -a could not complete the interrupted package configuration."
+      return 1
+    fi
+  fi
+
+  if ! apt-get check >/dev/null 2>&1; then
+    nova_phase1_info "Repairing incomplete APT dependencies."
+    if ! DEBIAN_FRONTEND=noninteractive apt-get -f install -y; then
+      nova_phase1_error "apt-get -f install could not repair the package state."
+      return 1
+    fi
+  fi
 }
 
 nova_phase3_validate_admin_user() {
@@ -288,6 +308,10 @@ nova_phase3_verify_docker_api() {
     nova_phase1_error "docker --version failed."
     return 1
   fi
+  if ! docker version >/dev/null 2>&1; then
+    nova_phase1_error "docker version failed."
+    return 1
+  fi
   if ! compose_version="$(docker compose version)"; then
     nova_phase1_error "docker compose version failed."
     return 1
@@ -350,6 +374,7 @@ nova_phase3_preflight() {
   nova_phase1_info "Phase 3 preflight checks"
   nova_phase3_require_commands
   nova_phase3_require_phase2
+  nova_phase3_repair_package_state
   nova_phase3_validate_admin_user
   nova_phase3_check_incompatible_installations
   nova_phase3_verify_official_candidates
