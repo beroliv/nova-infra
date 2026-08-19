@@ -5,7 +5,30 @@
 readonly NOVA_PHASE13_BASHRC="/home/admin/.bashrc"
 readonly NOVA_PHASE13_HUSHLOGIN="/home/admin/.hushlogin"
 readonly NOVA_PHASE13_WIFI_CHECK="/etc/profile.d/wifi-check.sh"
-readonly NOVA_PHASE13_ALIAS="alias motd='sudo run-parts /etc/update-motd.d/'"
+readonly NOVA_PHASE13_MOTD_COMMAND="/usr/local/bin/motd"
+readonly NOVA_PHASE13_ALIAS="alias motd='/usr/local/bin/motd'"
+readonly NOVA_PHASE13_OLD_ALIAS="alias motd='sudo run-parts /etc/update-motd.d/'"
+readonly NOVA_PHASE13_MOTD_BEGIN="# BEGIN NOVA-INFRA MOTD"
+readonly NOVA_PHASE13_MOTD_END="# END NOVA-INFRA MOTD"
+
+nova_phase13_install_motd_command() {
+  local temporary_file
+  if [[ -L "$NOVA_PHASE13_MOTD_COMMAND" || ( -e "$NOVA_PHASE13_MOTD_COMMAND" && ! -f "$NOVA_PHASE13_MOTD_COMMAND" ) ]]; then
+    nova_phase1_error "MOTD command path is not a safe regular file."
+    return 1
+  fi
+  temporary_file="$(mktemp "${NOVA_PHASE13_MOTD_COMMAND}.candidate.XXXXXX")"
+  printf '%s\n' '#!/bin/sh' 'run-parts /etc/update-motd.d/ || true' >"$temporary_file"
+  chmod 0755 -- "$temporary_file"
+  chown root:root -- "$temporary_file"
+  if [[ -f "$NOVA_PHASE13_MOTD_COMMAND" ]] && cmp -s -- "$temporary_file" "$NOVA_PHASE13_MOTD_COMMAND"; then
+    rm -f -- "$temporary_file"
+  else
+    mv -f -- "$temporary_file" "$NOVA_PHASE13_MOTD_COMMAND"
+  fi
+  chmod 0755 -- "$NOVA_PHASE13_MOTD_COMMAND"
+  chown root:root -- "$NOVA_PHASE13_MOTD_COMMAND"
+}
 
 nova_phase13_create_hushlogin() {
   if [[ -L "$NOVA_PHASE13_HUSHLOGIN" || ( -e "$NOVA_PHASE13_HUSHLOGIN" && ! -f "$NOVA_PHASE13_HUSHLOGIN" ) ]]; then
@@ -53,6 +76,7 @@ nova_phase13_report_docker_relogin() {
 nova_phase13_main() {
   local bashrc temporary_file
   nova_phase1_info "Phase 13 MOTD convenience alias"
+  nova_phase13_install_motd_command
   nova_phase13_create_hushlogin
   nova_phase13_disable_raspberrypi_wifi_warning
   bashrc="$NOVA_PHASE13_BASHRC"
@@ -62,13 +86,33 @@ nova_phase13_main() {
   fi
   temporary_file="$(mktemp "${bashrc}.candidate.XXXXXX")"
   if [[ -f "$bashrc" ]]; then
-    awk -v alias_line="$NOVA_PHASE13_ALIAS" '
+    awk -v alias_line="$NOVA_PHASE13_ALIAS" \
+      -v old_alias="$NOVA_PHASE13_OLD_ALIAS" \
+      -v motd_begin="$NOVA_PHASE13_MOTD_BEGIN" \
+      -v motd_end="$NOVA_PHASE13_MOTD_END" '
       $0 == alias_line { next }
+      $0 == old_alias { next }
+      $0 == motd_begin { in_motd=1; next }
+      in_motd && $0 == motd_end { in_motd=0; next }
+      in_motd { next }
       { print }
-      END { print alias_line }
+      END {
+        print motd_begin
+        print alias_line
+        print "if [[ $- == *i* ]]; then"
+        print "  /usr/local/bin/motd"
+        print "fi"
+        print motd_end
+      }
     ' "$bashrc" >"$temporary_file"
   else
-    printf '%s\n' "$NOVA_PHASE13_ALIAS" >"$temporary_file"
+    printf '%s\n' \
+      "$NOVA_PHASE13_MOTD_BEGIN" \
+      "$NOVA_PHASE13_ALIAS" \
+      'if [[ $- == *i* ]]; then' \
+      '  /usr/local/bin/motd' \
+      'fi' \
+      "$NOVA_PHASE13_MOTD_END" >"$temporary_file"
   fi
   chmod 0644 -- "$temporary_file"
   chown admin:admin -- "$temporary_file"
