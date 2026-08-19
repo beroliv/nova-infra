@@ -3,6 +3,69 @@
 set -Eeuo pipefail
 umask 077
 
+readonly NOVA_BOOTSTRAP_CHECKOUT="/home/admin/nova-infra"
+readonly NOVA_BOOTSTRAP_REPOSITORY="https://github.com/beroliv/nova-infra.git"
+
+nova_bootstrap_checkout() {
+  local checkout="$NOVA_BOOTSTRAP_CHECKOUT"
+  local branch remote dirty
+
+  if [[ "$(id -u)" != "0" ]]; then
+    printf '[ERROR] Curl bootstrap must run as root; use sudo.\n' >&2
+    exit 1
+  fi
+  if ! command -v git >/dev/null 2>&1; then
+    printf '[ERROR] Git is required for the curl bootstrap but is not installed.\n' >&2
+    exit 1
+  fi
+  if [[ -L "$checkout" || ( -e "$checkout" && ! -d "$checkout" ) ]]; then
+    printf '[ERROR] Bootstrap checkout path is not a safe directory: %s\n' "$checkout" >&2
+    exit 1
+  fi
+
+  if [[ ! -d "$checkout/.git" ]]; then
+    if [[ -e "$checkout" ]] && [[ -n "$(find "$checkout" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+      printf '[ERROR] Bootstrap checkout exists but is not a Git checkout: %s\n' "$checkout" >&2
+      exit 1
+    fi
+    install -d -o admin -g admin "$checkout"
+    if ! runuser -u admin -- git clone --branch main --single-branch "$NOVA_BOOTSTRAP_REPOSITORY" "$checkout"; then
+      printf '[ERROR] Could not clone nova-infra into %s.\n' "$checkout" >&2
+      exit 1
+    fi
+  else
+    chown -R admin:admin "$checkout"
+    remote="$(runuser -u admin -- git -C "$checkout" remote get-url origin 2>/dev/null || true)"
+    if [[ "$remote" != "$NOVA_BOOTSTRAP_REPOSITORY" ]]; then
+      printf '[ERROR] Existing bootstrap checkout has an unexpected origin.\n' >&2
+      exit 1
+    fi
+    dirty="$(runuser -u admin -- git -C "$checkout" status --porcelain)"
+    if [[ -n "$dirty" ]]; then
+      printf '[ERROR] Existing bootstrap checkout has uncommitted changes; refusing to overwrite them.\n' >&2
+      exit 1
+    fi
+    branch="$(runuser -u admin -- git -C "$checkout" branch --show-current)"
+    if [[ "$branch" != "main" ]]; then
+      printf '[ERROR] Existing bootstrap checkout is not on the main branch.\n' >&2
+      exit 1
+    fi
+    if ! runuser -u admin -- git -C "$checkout" fetch origin main \
+      || ! runuser -u admin -- git -C "$checkout" merge --ff-only origin/main; then
+      printf '[ERROR] Could not update the persistent nova-infra checkout safely.\n' >&2
+      exit 1
+    fi
+  fi
+}
+
+if [[ "${NOVA_CURL_BOOTSTRAP_ACTIVE:-0}" != "1" ]]; then
+  NOVA_ENTRYPOINT="${BASH_SOURCE[0]:-}"
+  if [[ -z "$NOVA_ENTRYPOINT" || "$NOVA_ENTRYPOINT" == "/dev/stdin" || "$NOVA_ENTRYPOINT" == "bash" || ! -f "$NOVA_ENTRYPOINT" ]]; then
+    nova_bootstrap_checkout
+    exec env NOVA_CURL_BOOTSTRAP_ACTIVE=1 bash "$NOVA_BOOTSTRAP_CHECKOUT/install.sh" "$@"
+  fi
+fi
+
 readonly NOVA_INSTALLER_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=lib/phase1.sh
