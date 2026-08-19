@@ -111,8 +111,10 @@ source "${NOVA_INSTALLER_DIR}/lib/phase10.sh"
 source "${NOVA_INSTALLER_DIR}/lib/phase11.sh"
 # shellcheck source=lib/phase12.sh
 source "${NOVA_INSTALLER_DIR}/lib/phase12.sh"
+# shellcheck source=lib/phase13.sh
+source "${NOVA_INSTALLER_DIR}/lib/phase13.sh"
 
-readonly NOVA_INSTALL_PHASES="${NOVA_INSTALL_PHASES:-12}"
+readonly NOVA_INSTALL_PHASES="${NOVA_INSTALL_PHASES:-13}"
 if [[ "$NOVA_INSTALL_PHASES" != "1" \
   && "$NOVA_INSTALL_PHASES" != "2" \
   && "$NOVA_INSTALL_PHASES" != "3" \
@@ -126,8 +128,9 @@ if [[ "$NOVA_INSTALL_PHASES" != "1" \
   && "$NOVA_INSTALL_PHASES" != "9" \
   && "$NOVA_INSTALL_PHASES" != "10" \
   && "$NOVA_INSTALL_PHASES" != "11" \
-  && "$NOVA_INSTALL_PHASES" != "12" ]]; then
-  nova_phase1_error "NOVA_INSTALL_PHASES must be 1, 2, 3, 4a, 4b, 4c, 5, 6, 7, 8, 9, 10, 11, or 12."
+  && "$NOVA_INSTALL_PHASES" != "12" \
+  && "$NOVA_INSTALL_PHASES" != "13" ]]; then
+  nova_phase1_error "NOVA_INSTALL_PHASES must be 1, 2, 3, 4a, 4b, 4c, 5, 6, 7, 8, 9, 10, 11, 12, or 13."
   exit 2
 fi
 
@@ -144,7 +147,8 @@ if [[ "$NOVA_INSTALL_PHASES" == "2" \
   || "$NOVA_INSTALL_PHASES" == "9" \
   || "$NOVA_INSTALL_PHASES" == "10" \
   || "$NOVA_INSTALL_PHASES" == "11" \
-  || "$NOVA_INSTALL_PHASES" == "12" ]]; then
+  || "$NOVA_INSTALL_PHASES" == "12" \
+  || "$NOVA_INSTALL_PHASES" == "13" ]]; then
   nova_phase2_main
 fi
 if [[ "$NOVA_INSTALL_PHASES" == "3" \
@@ -158,7 +162,8 @@ if [[ "$NOVA_INSTALL_PHASES" == "3" \
   || "$NOVA_INSTALL_PHASES" == "9" \
   || "$NOVA_INSTALL_PHASES" == "10" \
   || "$NOVA_INSTALL_PHASES" == "11" \
-  || "$NOVA_INSTALL_PHASES" == "12" ]]; then
+  || "$NOVA_INSTALL_PHASES" == "12" \
+  || "$NOVA_INSTALL_PHASES" == "13" ]]; then
   nova_phase3_main
 fi
 if [[ "$NOVA_INSTALL_PHASES" == "4a" \
@@ -171,13 +176,14 @@ if [[ "$NOVA_INSTALL_PHASES" == "4a" \
   || "$NOVA_INSTALL_PHASES" == "9" \
   || "$NOVA_INSTALL_PHASES" == "10" \
   || "$NOVA_INSTALL_PHASES" == "11" \
-  || "$NOVA_INSTALL_PHASES" == "12" ]]; then
+  || "$NOVA_INSTALL_PHASES" == "12" \
+  || "$NOVA_INSTALL_PHASES" == "13" ]]; then
   nova_phase4a_main
 fi
-if [[ "$NOVA_INSTALL_PHASES" == "4b" || "$NOVA_INSTALL_PHASES" == "4c" || "$NOVA_INSTALL_PHASES" == "5" || "$NOVA_INSTALL_PHASES" == "6" || "$NOVA_INSTALL_PHASES" == "7" || "$NOVA_INSTALL_PHASES" == "8" || "$NOVA_INSTALL_PHASES" == "9" || "$NOVA_INSTALL_PHASES" == "10" || "$NOVA_INSTALL_PHASES" == "11" || "$NOVA_INSTALL_PHASES" == "12" ]]; then
+if [[ "$NOVA_INSTALL_PHASES" == "4b" || "$NOVA_INSTALL_PHASES" == "4c" || "$NOVA_INSTALL_PHASES" == "5" || "$NOVA_INSTALL_PHASES" == "6" || "$NOVA_INSTALL_PHASES" == "7" || "$NOVA_INSTALL_PHASES" == "8" || "$NOVA_INSTALL_PHASES" == "9" || "$NOVA_INSTALL_PHASES" == "10" || "$NOVA_INSTALL_PHASES" == "11" || "$NOVA_INSTALL_PHASES" == "12" || "$NOVA_INSTALL_PHASES" == "13" ]]; then
   nova_phase4b_main
 fi
-if [[ "$NOVA_INSTALL_PHASES" == "4c" || "$NOVA_INSTALL_PHASES" == "5" || "$NOVA_INSTALL_PHASES" == "6" || "$NOVA_INSTALL_PHASES" == "7" || "$NOVA_INSTALL_PHASES" == "8" || "$NOVA_INSTALL_PHASES" == "9" || "$NOVA_INSTALL_PHASES" == "10" || "$NOVA_INSTALL_PHASES" == "11" || "$NOVA_INSTALL_PHASES" == "12" ]]; then
+if [[ "$NOVA_INSTALL_PHASES" == "4c" || "$NOVA_INSTALL_PHASES" == "5" || "$NOVA_INSTALL_PHASES" == "6" || "$NOVA_INSTALL_PHASES" == "7" || "$NOVA_INSTALL_PHASES" == "8" || "$NOVA_INSTALL_PHASES" == "9" || "$NOVA_INSTALL_PHASES" == "10" || "$NOVA_INSTALL_PHASES" == "11" || "$NOVA_INSTALL_PHASES" == "12" || "$NOVA_INSTALL_PHASES" == "13" ]]; then
   nova_phase4c_main
 fi
 if [[ "$NOVA_INSTALL_PHASES" == "5" ]]; then
@@ -187,24 +193,27 @@ if [[ "$NOVA_INSTALL_PHASES" == "6" ]]; then
   nova_phase5_main
   nova_phase6_main
 fi
-if [[ "$NOVA_INSTALL_PHASES" == "7" || "$NOVA_INSTALL_PHASES" == "8" || "$NOVA_INSTALL_PHASES" == "9" || "$NOVA_INSTALL_PHASES" == "10" || "$NOVA_INSTALL_PHASES" == "11" || "$NOVA_INSTALL_PHASES" == "12" ]]; then
+if [[ "$NOVA_INSTALL_PHASES" == "7" || "$NOVA_INSTALL_PHASES" == "8" || "$NOVA_INSTALL_PHASES" == "9" || "$NOVA_INSTALL_PHASES" == "10" || "$NOVA_INSTALL_PHASES" == "11" || "$NOVA_INSTALL_PHASES" == "12" || "$NOVA_INSTALL_PHASES" == "13" ]]; then
   nova_phase5_main
   nova_phase6_main
   nova_phase7_main
 fi
-if [[ "$NOVA_INSTALL_PHASES" == "8" || "$NOVA_INSTALL_PHASES" == "9" || "$NOVA_INSTALL_PHASES" == "10" || "$NOVA_INSTALL_PHASES" == "11" || "$NOVA_INSTALL_PHASES" == "12" ]]; then
+if [[ "$NOVA_INSTALL_PHASES" == "8" || "$NOVA_INSTALL_PHASES" == "9" || "$NOVA_INSTALL_PHASES" == "10" || "$NOVA_INSTALL_PHASES" == "11" || "$NOVA_INSTALL_PHASES" == "12" || "$NOVA_INSTALL_PHASES" == "13" ]]; then
   nova_phase8_main
 fi
-if [[ "$NOVA_INSTALL_PHASES" == "9" || "$NOVA_INSTALL_PHASES" == "10" || "$NOVA_INSTALL_PHASES" == "11" || "$NOVA_INSTALL_PHASES" == "12" ]]; then
+if [[ "$NOVA_INSTALL_PHASES" == "9" || "$NOVA_INSTALL_PHASES" == "10" || "$NOVA_INSTALL_PHASES" == "11" || "$NOVA_INSTALL_PHASES" == "12" || "$NOVA_INSTALL_PHASES" == "13" ]]; then
   nova_phase9_main
 fi
-if [[ "$NOVA_INSTALL_PHASES" == "10" || "$NOVA_INSTALL_PHASES" == "11" || "$NOVA_INSTALL_PHASES" == "12" ]]; then
+if [[ "$NOVA_INSTALL_PHASES" == "10" || "$NOVA_INSTALL_PHASES" == "11" || "$NOVA_INSTALL_PHASES" == "12" || "$NOVA_INSTALL_PHASES" == "13" ]]; then
   nova_phase10_main
 fi
-if [[ "$NOVA_INSTALL_PHASES" == "11" || "$NOVA_INSTALL_PHASES" == "12" ]]; then
+if [[ "$NOVA_INSTALL_PHASES" == "11" || "$NOVA_INSTALL_PHASES" == "12" || "$NOVA_INSTALL_PHASES" == "13" ]]; then
   nova_phase11_main
 fi
-if [[ "$NOVA_INSTALL_PHASES" == "12" ]]; then
+if [[ "$NOVA_INSTALL_PHASES" == "12" || "$NOVA_INSTALL_PHASES" == "13" ]]; then
   nova_phase11_main
   nova_phase12_main
+fi
+if [[ "$NOVA_INSTALL_PHASES" == "13" ]]; then
+  nova_phase13_main
 fi
