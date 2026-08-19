@@ -31,6 +31,17 @@ chmod +x "$fake_bin/getent" "$fake_bin/id"
 
 PATH="$fake_bin:$PATH" nova_phase3_validate_admin_user
 
+cat >"$fake_bin/apt-cache" <<'EOF'
+#!/bin/sh
+if [ "${LC_ALL:-}" = "C" ]; then
+  printf '%s\n' 'Candidate: 1.0' ' https://download.docker.com/linux/debian trixie/stable arm64 Packages'
+else
+  printf '%s\n' 'Installationskandidat: 1.0'
+fi
+EOF
+chmod +x "$fake_bin/apt-cache"
+PATH="$fake_bin:$PATH" nova_phase3_verify_official_candidates
+
 if grep -Fq 'UID/GID 1000' "$ROOT_DIR/lib/phase3.sh"; then
   printf '%s\n' 'phase3 still requires UID/GID 1000' >&2
   exit 1

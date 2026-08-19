@@ -176,7 +176,7 @@ nova_phase3_verify_official_candidates() {
 
   nova_phase1_info "Checking official Docker repository package candidates."
   for package in "${NOVA_PHASE3_DOCKER_PACKAGES[@]}"; do
-    policy="$(apt-cache policy "$package" 2>/dev/null || true)"
+    policy="$(LC_ALL=C apt-cache policy "$package" 2>/dev/null || true)"
     if [[ -z "$policy" ]] \
       || grep -Eq '^[[:space:]]*Candidate:[[:space:]]*\(none\)[[:space:]]*$' <<< "$policy" \
       || ! grep -Eq '^[[:space:]]*Candidate:[[:space:]]*[^[:space:]]+' <<< "$policy" \
