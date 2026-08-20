@@ -820,7 +820,7 @@ grundsätzlich erhalten:
 | --- | --- | --- | --- |
 | `vault.lan` | `vaultwarden:80` | internal | HTTP wird auf HTTPS umgeleitet |
 | `wg-easy.lan` | `192.168.0.195:51821` | internal | wg-easy-Weboberfläche auf Nova |
-| `adguard-nova.lan` | `192.168.0.195:80` | internal | AdGuard Home auf Nova |
+| `adguard-nova.lan` | `192.168.0.195:3000` | internal | AdGuard Home auf Nova |
 | `adguard-arc.lan` | `192.168.0.193:80` | internal | AdGuard Home auf Arc |
 | `ds3.lan` | `192.168.0.100:5000` | internal | DSM auf `Diskstation3` |
 | `syncthing-ds3.lan` | `192.168.0.100:8384` | internal | Syncthing auf `Diskstation3` |
@@ -873,13 +873,27 @@ folgende Vorgaben:
 
 #### 7.5.4 Zertifikate und interne CA
 
-Die persistierenden Daten der bestehenden Caddy-CA werden beim Disaster Recovery
-manuell aus dem geschützten Backup wiederhergestellt. Private CA-Schlüssel und
-anderes geheimes Zertifikatsmaterial dürfen niemals im Git-Repository von
-`nova-infra` gespeichert werden.
+Die persistierende lokale Caddy-CA wird beim Disaster Recovery bevorzugt aus
+dem geschützten Recovery-Medium wiederhergestellt. Die vollständige Authority
+liegt unter:
 
-`nova-infra` erfindet die bestehende Vertrauenskette nicht neu, sondern baut auf
-der Caddy- und CA-Architektur der Vaultwarden-Appliance auf.
+```text
+INFRA-RECOVERY/backup/caddy/pki/authorities/local/
+├── root.crt
+├── root.key
+├── intermediate.crt
+└── intermediate.key
+```
+
+Die vier Dateien werden vor der ersten Nutzung der Caddy-Konfiguration
+vollständig übernommen. Neu erzeugte lokale Leaf-Zertifikate dürfen dabei
+entfernt werden, damit Caddy sie unter der wiederhergestellten Authority neu
+ausstellt. `instance.uuid` und `autosave.json` sowie alte Leaf-Zertifikate sind
+nicht Bestandteil des Restores. Private CA-Schlüssel und anderes geheimes
+Zertifikatsmaterial dürfen niemals im Git-Repository von `nova-infra` gespeichert
+werden. Eine erfolgreiche Wiederherstellung wird markiert und bei späteren
+Läufen nicht erneut überschrieben; partielle oder unsichere Backups führen zu
+einem kontrollierten Abbruch.
 
 ### 7.6 Backup und Syncthing
 
@@ -1520,6 +1534,14 @@ INFRA-RECOVERY (filesystem label)
 ├── secrets/
 │   └── secrets.env
 ├── backup/
+│   ├── caddy/
+│   │   └── pki/
+│   │       └── authorities/
+│   │           └── local/
+│   │               ├── root.crt
+│   │               ├── root.key
+│   │               ├── intermediate.crt
+│   │               └── intermediate.key
 │   ├── adguard/
 │   │   └── AdGuardHome.yaml
 │   └── syncthing/

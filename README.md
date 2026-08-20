@@ -149,7 +149,11 @@ Phase 6 ergänzt die interne HTTPS-Caddyfile der bestehenden
 `vaultwarden-appliance` um die Nova-Hosts `wg-easy.lan`, `adguard-nova.lan`,
 `adguard-arc.lan`, `ds3.lan`, `syncthing-ds3.lan` und `syncthing-nova.lan` mit
 `tls internal`. Es wird kein zweiter Caddy gestartet; die Appliance-Caddyfile
-und ihre CA-Daten bleiben maßgeblich. Die Ergänzung ist markiert und idempotent.
+und ihre CA-Daten bleiben maßgeblich. Die vorhandene lokale Caddy-Authority kann
+bei der Erstinstallation vollständig aus
+`INFRA-RECOVERY/backup/caddy/pki/authorities/local/` wiederhergestellt werden;
+die Ergänzung ist markiert und idempotent. AdGuard Home wird dabei über seinen
+Web-Port 3000 angesprochen.
 
 Phase 7 stellt AdGuard Home als offiziellen Docker-Container unter `/opt/adguard`
 mit `network_mode: host` bereit. Die vollständige bewährte Konfiguration wird
