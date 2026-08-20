@@ -8,6 +8,8 @@ readonly NOVA_PHASE6_END_MARKER="# END NOVA-INFRA HOSTS"
 readonly NOVA_PHASE6_CADDYFILE_RELATIVE_PATH="opt/vaultwarden/Caddyfile"
 readonly NOVA_PHASE6_CADDY_DATA_RELATIVE_PATH="opt/vaultwarden/data/caddy/data"
 readonly NOVA_PHASE6_CADDY_CA_MARKER_RELATIVE_PATH="opt/vaultwarden/data/caddy/.nova-infra-ca-restored"
+readonly NOVA_PHASE6_CADDY_RECOVERY_RELATIVE_PATH="backup/caddy/pki/authorities/local"
+readonly NOVA_PHASE6_CADDY_AUTHORITY_RELATIVE_PATH="caddy/pki/authorities/local"
 
 nova_phase6_require_commands() {
   local command_name
@@ -81,7 +83,7 @@ nova_phase6_restore_caddy_ca() {
   data_dir="$(nova_phase1_root_path "/${NOVA_PHASE6_CADDY_DATA_RELATIVE_PATH}")"
   marker="$(nova_phase1_root_path "/${NOVA_PHASE6_CADDY_CA_MARKER_RELATIVE_PATH}")"
   target_pki="${data_dir}/caddy/pki"
-  target_authority="${target_pki}/authorities/local"
+  target_authority="${data_dir}/${NOVA_PHASE6_CADDY_AUTHORITY_RELATIVE_PATH}"
   if [[ -L "$data_dir" || ( -e "$data_dir" && ! -d "$data_dir" ) || -L "$marker" || ( -e "$marker" && ! -f "$marker" ) ]]; then
     nova_phase1_error "Caddy data or CA marker path is unsafe."
     return 1
@@ -103,7 +105,7 @@ nova_phase6_restore_caddy_ca() {
     nova_phase1_info "INFRA-RECOVERY is unavailable; preserving the existing Caddy CA."
     return 0
   fi
-  source_dir="${recovery_root}/backup/caddy/pki/authorities/local"
+  source_dir="${recovery_root}/${NOVA_PHASE6_CADDY_RECOVERY_RELATIVE_PATH}"
   if [[ -L "$source_dir" || ! -d "$source_dir" ]]; then
     nova_phase1_error "INFRA-RECOVERY Caddy authority directory is missing or unsafe."
     nova_phase1_cleanup_recovery || true
@@ -111,7 +113,7 @@ nova_phase6_restore_caddy_ca() {
   fi
   recovery_real="$(readlink -f -- "$recovery_root")"
   source_real="$(readlink -f -- "$source_dir")"
-  if [[ "$source_real" != "${recovery_real}/backup/caddy/pki/authorities/local" ]]; then
+  if [[ "$source_real" != "${recovery_real}/${NOVA_PHASE6_CADDY_RECOVERY_RELATIVE_PATH}" ]]; then
     nova_phase1_error "Caddy recovery authority resolves outside INFRA-RECOVERY."
     nova_phase1_cleanup_recovery || true
     return 1
