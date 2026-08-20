@@ -8,13 +8,13 @@ readonly NOVA_PHASE7_CONF_DIR_RELATIVE_PATH="opt/adguard/conf"
 readonly NOVA_PHASE7_WORK_DIR_RELATIVE_PATH="opt/adguard/work"
 readonly NOVA_PHASE7_COMPOSE_RELATIVE_PATH="opt/adguard/compose.yml"
 readonly NOVA_PHASE7_CONFIG_RELATIVE_PATH="opt/adguard/conf/AdGuardHome.yaml"
-readonly NOVA_PHASE7_MARKER_RELATIVE_PATH="opt/adguard/.nova-infra-managed"
+readonly NOVA_PHASE7_RECOVERY_MARKER_RELATIVE_PATH="opt/adguard/.nova-infra-recovery-restored"
 readonly NOVA_PHASE7_CADDYFILE_RELATIVE_PATH="opt/vaultwarden/Caddyfile"
 NOVA_PHASE7_CONFIG_CHANGED=0
 
 nova_phase7_require_commands() {
   local command_name missing=0
-  for command_name in chmod chown cmp cp docker grep mkdir mktemp mv rm; do
+  for command_name in chmod chown cmp cp docker findmnt grep mkdir mktemp mv readlink rm; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
       nova_phase1_error "Required AdGuard command is missing: ${command_name}"
       missing=1
@@ -53,127 +53,66 @@ nova_phase7_prepare_paths() {
   done
 }
 
-nova_phase7_read_password_hash() {
-  local result_name="$1"
-  local secrets value
-  secrets="$(nova_phase1_root_path "/${NOVA_PHASE1_LOCAL_SECRET_RELATIVE_PATH}")"
-  value="$(nova_phase1_read_assignment "$secrets" ADGUARD_PASSWORD_HASH || true)"
-  if [[ -z "$value" || "$value" == CHANGE_ME_* ]]; then
-    nova_phase1_error "ADGUARD_PASSWORD_HASH is unresolved; AdGuard Home was not started."
-    return 1
-  fi
-  printf -v "$result_name" '%s' "$value"
-}
-
-nova_phase7_write_config() {
-  local password_hash="$1"
-  local config marker temporary_file marker_file
+nova_phase7_restore_config() {
+  local config marker recovery_root recovery_real source_config source_real \
+    temporary_file marker_file mounted_uuid
   config="$(nova_phase1_root_path "/${NOVA_PHASE7_CONFIG_RELATIVE_PATH}")"
-  marker="$(nova_phase1_root_path "/${NOVA_PHASE7_MARKER_RELATIVE_PATH}")"
-  if [[ -e "$config" || -L "$config" ]] && [[ ! -f "$config" || -L "$config" ]]; then
-    nova_phase1_error "AdGuard configuration path is not a safe regular file."
+  marker="$(nova_phase1_root_path "/${NOVA_PHASE7_RECOVERY_MARKER_RELATIVE_PATH}")"
+  if [[ -L "$config" || ( -e "$config" && ! -f "$config" ) || -L "$marker" || ( -e "$marker" && ! -f "$marker" ) ]]; then
+    nova_phase1_error "AdGuard configuration or recovery marker is not a safe regular file."
     return 1
   fi
-  if [[ -f "$config" && ! -f "$marker" ]]; then
+  if [[ -f "$marker" ]]; then
+    [[ -f "$config" ]] || { nova_phase1_error "AdGuard recovery marker exists but configuration is missing."; return 1; }
+    nova_phase1_ok "Existing recovered AdGuard configuration preserved."
+    return 0
+  fi
+  if [[ -f "$config" ]]; then
     nova_phase1_error "An existing unmanaged AdGuard configuration will not be overwritten."
     return 1
   fi
+
+  nova_phase1_discover_recovery
+  recovery_root="$NOVA_PHASE1_RECOVERY_ROOT"
+  if [[ -z "$recovery_root" ]]; then
+    nova_phase1_error "INFRA-RECOVERY AdGuardHome.yaml is unavailable; refusing incomplete configuration."
+    return 1
+  fi
+  source_config="${recovery_root}/backup/adguard/AdGuardHome.yaml"
+  if [[ -L "$source_config" || ! -f "$source_config" ]]; then
+    nova_phase1_error "INFRA-RECOVERY is missing a regular AdGuardHome.yaml."
+    nova_phase1_cleanup_recovery || true
+    return 1
+  fi
+  recovery_real="$(readlink -f -- "$recovery_root")"
+  source_real="$(readlink -f -- "$source_config")"
+  if [[ "$source_real" != "${recovery_real}/backup/adguard/AdGuardHome.yaml" ]]; then
+    nova_phase1_error "AdGuard recovery configuration resolves outside INFRA-RECOVERY."
+    nova_phase1_cleanup_recovery || true
+    return 1
+  fi
+  mounted_uuid="$(findmnt -rn -T "$source_real" -o UUID 2>/dev/null || true)"
+  if [[ -n "$NOVA_PHASE1_RECOVERY_UUID" && "$mounted_uuid" != "$NOVA_PHASE1_RECOVERY_UUID" ]]; then
+    nova_phase1_error "AdGuard recovery configuration is not on the validated recovery filesystem."
+    nova_phase1_cleanup_recovery || true
+    return 1
+  fi
+  docker stop adguardhome >/dev/null 2>&1 || true
   temporary_file="$(mktemp "${config}.candidate.XXXXXX")"
-  {
-    printf '%s\n' '# nova-infra-managed AdGuard Home configuration'
-    printf '%s\n' 'schema_version: 34'
-    printf '%s\n' 'http:' '  address: 0.0.0.0:80'
-    printf '%s\n' 'users:' '  - name: admin'
-    printf '    password: %s\n' "$password_hash"
-    printf '%s\n' \
-      'dns:' \
-      '  bind_hosts:' \
-      '    - 0.0.0.0' \
-      '  port: 53' \
-      '  protection_enabled: true' \
-      '  filtering_enabled: true' \
-      '  refuse_any: true' \
-      '  cache_enabled: false' \
-      '  cache_size: 0' \
-      '  enable_dnssec: false' \
-      '  upstream_dns:' \
-      '    - 127.0.0.1:5335' \
-      '    - 192.168.0.193:5335' \
-      '  upstream_mode: parallel' \
-      '  fallback_dns: []' \
-      '  bootstrap_dns:'
-    printf '%s\n' \
-      '    - 9.9.9.10' \
-      '    - 149.112.112.10'
-    printf '%s\n' \
-      '  filters:' \
-      '    - enabled: true' \
-      '      url: https://filters.adtidy.org/extension/ublock/filters/2.txt' \
-      '      name: AdGuard DNS filter' \
-      '      id: 1' \
-      '    - enabled: true' \
-      '      url: https://adaway.org/hosts.txt' \
-      '      name: AdAway Default Blocklist' \
-      '      id: 2' \
-      '    - enabled: true' \
-      '      url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/pro.txt' \
-      '      name: HaGeZi Normal Blocklist' \
-      '      id: 3' \
-      '    - enabled: true' \
-      '      url: https://raw.githubusercontent.com/hagezi/dns-blocklists/main/whitelist-referral.txt' \
-      '      name: HaGeZi Allowlist Referral' \
-      '      id: 4' \
-      '  user_rules: []' \
-      'filtering:' \
-      '  rewrites:' \
-      '    - domain: arc.lan' \
-      '      answer: 192.168.0.193' \
-      '      enabled: true' \
-      '    - domain: adguard-arc.lan' \
-      '      answer: 192.168.0.193' \
-      '      enabled: true' \
-      '    - domain: ds3.lan' \
-      '      answer: 192.168.0.100' \
-      '      enabled: true' \
-      '    - domain: syncthing-ds3.lan' \
-      '      answer: 192.168.0.100' \
-      '      enabled: true' \
-      '    - domain: nova.lan' \
-      '      answer: 192.168.0.195' \
-      '      enabled: true' \
-      '    - domain: vault.lan' \
-      '      answer: 192.168.0.195' \
-      '      enabled: true' \
-      '    - domain: adguard-nova.lan' \
-      '      answer: 192.168.0.195' \
-      '      enabled: true' \
-      '    - domain: syncthing-nova.lan' \
-      '      answer: 192.168.0.195' \
-      '      enabled: true' \
-      '    - domain: wg-easy.lan' \
-      '      answer: 192.168.0.195' \
-      '      enabled: true' \
-      '  rewrites_enabled: true' \
-      'dhcp:' \
-      '  enabled: false'
-  } > "$temporary_file"
+  cp -- "$source_real" "$temporary_file"
   chmod 0640 -- "$temporary_file"
   chown root:root -- "$temporary_file"
-  if [[ -f "$config" ]] && cmp -s -- "$temporary_file" "$config"; then
-    rm -f -- "$temporary_file"
-  else
-    mv -f -- "$temporary_file" "$config"
-    NOVA_PHASE7_CONFIG_CHANGED=1
-  fi
+  mv -f -- "$temporary_file" "$config"
   chmod 0640 -- "$config"
   chown root:root -- "$config"
-  if [[ ! -f "$marker" ]]; then
-    marker_file="$(mktemp "${marker}.candidate.XXXXXX")"
-    printf '%s\n' 'nova-infra-managed AdGuard Home configuration' > "$marker_file"
-    chmod 0644 -- "$marker_file"
-    chown root:root -- "$marker_file"
-    mv -f -- "$marker_file" "$marker"
-  fi
+  marker_file="$(mktemp "${marker}.candidate.XXXXXX")"
+  printf '%s\n' 'nova-infra AdGuard recovery configuration restored' > "$marker_file"
+  chmod 0644 -- "$marker_file"
+  chown root:root -- "$marker_file"
+  mv -f -- "$marker_file" "$marker"
+  NOVA_PHASE7_CONFIG_CHANGED=1
+  nova_phase1_cleanup_recovery || return 1
+  nova_phase1_ok "AdGuard configuration restored from INFRA-RECOVERY without exposing its contents."
 }
 
 nova_phase7_write_compose() {
@@ -223,13 +162,11 @@ nova_phase7_deploy() {
 }
 
 nova_phase7_main() {
-  local password_hash=""
   nova_phase1_info "Phase 7 AdGuard Home container"
   nova_phase7_require_commands
   nova_phase7_require_prerequisites
   nova_phase7_prepare_paths
-  nova_phase7_read_password_hash password_hash
-  nova_phase7_write_config "$password_hash"
+  nova_phase7_restore_config
   nova_phase7_write_compose
   nova_phase7_deploy
 }

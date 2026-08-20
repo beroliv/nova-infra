@@ -152,10 +152,12 @@ Phase 6 ergänzt die interne HTTPS-Caddyfile der bestehenden
 und ihre CA-Daten bleiben maßgeblich. Die Ergänzung ist markiert und idempotent.
 
 Phase 7 stellt AdGuard Home als offiziellen Docker-Container unter `/opt/adguard`
-mit `network_mode: host` bereit. Die Konfiguration nutzt den nativen Nova-
-Unbound auf `127.0.0.1:5335`, die dokumentierten internen Upstreams und die
-persistenten Verzeichnisse `conf` und `work`. Caddy und Unbound werden in dieser
-Phase nicht verändert.
+mit `network_mode: host` bereit. Die vollständige bewährte Konfiguration wird
+bei der Erstinstallation byteweise aus
+`INFRA-RECOVERY/backup/adguard/AdGuardHome.yaml` übernommen; dadurch bleiben
+Web-UI-Zugang, Filter, Rewrites und Clients erhalten. Ohne dieses Restore-Artefakt
+wird keine unvollständige Konfiguration gestartet. Caddy und Unbound werden in
+dieser Phase nicht verändert.
 
 Phase 8 installiert Syncthing nativ als `syncthing@admin.service`. Auf einem
 frischen System werden `cert.pem`, `key.pem` und `config.xml` einmalig aus

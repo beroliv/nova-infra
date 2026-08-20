@@ -277,9 +277,10 @@ APT-Downloads sowie Docker-Pulls müssen abgeschlossen sein. Dadurch bleibt die
 bestehende DNS-Funktion bis zum bewusst ausgeführten finalen DNS-Umschalten
 unangetastet.
 
-Der bestehende Web-UI-Zugang wird über `ADGUARD_PASSWORD_HASH` aus dem
-Recovery-Secret wiederhergestellt. Ein Klartextpasswort wird weder benötigt noch
-gespeichert.
+Die vollständige produktive AdGuard-Konfiguration einschließlich Web-UI-Hash,
+Filterlisten, Rewrites und Clients wird als geschütztes Restore-Artefakt aus
+`INFRA-RECOVERY/backup/adguard/AdGuardHome.yaml` übernommen. Ein
+Klartextpasswort wird weder benötigt noch gespeichert.
 
 #### 4.1.2 Upstreams, Fallback und Bootstrap
 
@@ -363,16 +364,15 @@ Infrastrukturzustands und müssen beim Neuaufbau nicht restauriert werden:
 
 #### 4.1.6 Konfigurationsstrategie
 
-Die bestehende produktive `/opt/AdGuardHome/AdGuardHome.yaml` dient nur als
-Referenz. Der spätere Docker-Sollzustand wird als saubere Konfiguration unter
-`/opt/adguard/conf/AdGuardHome.yaml` erzeugt und nicht blind kopiert. Dabei gelten
-folgende Vorgaben:
-
-- bewährte DNS- und Filterparameter erhalten
-- Atlas-Einträge entfernen
-- keine unnötigen historischen Laufzeitdaten übernehmen
-- keine eigenständigen „Optimierungen“ der getesteten DNS-Architektur durchführen
-- keine Secrets ins Repository übernehmen
+Die bestehende produktive `/opt/AdGuardHome/AdGuardHome.yaml` wird als
+Referenz- und Restore-Artefakt unter
+`INFRA-RECOVERY/backup/adguard/AdGuardHome.yaml` geschützt abgelegt. Der spätere
+Docker-Sollzustand übernimmt diese Datei bei der erstmaligen Migration byteweise
+nach `/opt/adguard/conf/AdGuardHome.yaml`, damit Web-UI-Hash, Filterlisten,
+Rewrites, Clients und weitere bewährte Einstellungen erhalten bleiben. Nach
+erfolgreicher Wiederherstellung wird die lokale Konfiguration bei erneuten
+Läufen nicht erneut vom Medium überschrieben. Fehlt das Restore-Artefakt, wird
+keine unvollständige AdGuard-Konfiguration erzeugt oder gestartet.
 
 ### 4.2 Unbound
 
@@ -1458,14 +1458,11 @@ Nach aktuellem Stand gehören insbesondere folgende Variablen hinein:
 - `DYNDNS_URL`
 - `CAMERA_URL`
 - `TOKEN`
-- `ADGUARD_PASSWORD_HASH`
 - `WG_EASY_PASSWORD`
 
 `CAMERA_URL` enthält die vollständige RTSP-URL einschließlich eventueller
 Kamera-Zugangsdaten und wird vollständig als Secret behandelt. `TOKEN` ist das
-Prusa-Connect-Token. `ADGUARD_PASSWORD_HASH` enthält ausschließlich den
-vorhandenen Passwort-Hash für die AdGuard-Weboberfläche, niemals das
-Klartextpasswort. `WG_EASY_PASSWORD` ist das Zugangspasswort für die unattended
+Prusa-Connect-Token. `WG_EASY_PASSWORD` ist das Zugangspasswort für die unattended
 wg-easy-Erstinitialisierung; Phase 1 installiert oder konfiguriert wg-easy nicht.
 
 Weitere Variablen dürfen während der späteren Implementierung nur ergänzt werden,
@@ -1487,7 +1484,6 @@ und leere oder offensichtlich nicht produktive Platzhalter, beispielsweise:
 DYNDNS_URL="CHANGE_ME_DYNDNS_URL"
 CAMERA_URL="CHANGE_ME_CAMERA_URL"
 TOKEN="CHANGE_ME_TOKEN"
-ADGUARD_PASSWORD_HASH="CHANGE_ME_ADGUARD_PASSWORD_HASH"
 WG_EASY_PASSWORD="CHANGE_ME_WG_EASY_PASSWORD"
 ```
 
@@ -1524,6 +1520,9 @@ INFRA-RECOVERY (filesystem label)
 ├── secrets/
 │   └── secrets.env
 ├── backup/
+│   ├── adguard/
+│   │   └── AdGuardHome.yaml
+│   └── syncthing/
 └── README.txt
 ```
 
@@ -1741,7 +1740,7 @@ sein Fehlen darf die Gesamtinstallation nicht abbrechen. Ergänzend zu Abschnitt
 
 Fehlt ein Secret für einen optionalen Dienst, nennt der Installer verständlich
 den fehlenden Variablennamen, beispielsweise `DYNDNS_URL`, `CAMERA_URL`, `TOKEN`
-oder `ADGUARD_PASSWORD_HASH` oder `WG_EASY_PASSWORD`, ohne einen geheimen Wert
+oder `WG_EASY_PASSWORD`, ohne einen geheimen Wert
 auszugeben. Der fehlende Wert wird mit einem eindeutigen `CHANGE_ME_`-Platzhalter
 repräsentiert. Der betroffene Dienst bleibt deaktiviert oder wird eindeutig als
 manuell zu vervollständigen gemeldet. Am Installationsende werden alle ungelösten

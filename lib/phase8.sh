@@ -4,6 +4,8 @@
 
 readonly NOVA_PHASE8_PACKAGE="syncthing"
 readonly NOVA_PHASE8_USER="admin"
+readonly NOVA_PHASE8_LOCAL_RELATIVE_PATH="home/admin/.local"
+readonly NOVA_PHASE8_STATE_PARENT_RELATIVE_PATH="home/admin/.local/state"
 readonly NOVA_PHASE8_STATE_RELATIVE_PATH="home/admin/.local/state/syncthing"
 readonly NOVA_PHASE8_BACKUP_RELATIVE_PATH="opt/vaultwarden/backups"
 readonly NOVA_PHASE8_SERVICE="syncthing@admin.service"
@@ -39,6 +41,22 @@ nova_phase8_state_paths() {
   NOVA_PHASE8_CERT="${NOVA_PHASE8_STATE_DIR}/cert.pem"
   NOVA_PHASE8_KEY="${NOVA_PHASE8_STATE_DIR}/key.pem"
   NOVA_PHASE8_CONFIG="${NOVA_PHASE8_STATE_DIR}/config.xml"
+}
+
+nova_phase8_prepare_state_directories() {
+  local directory
+  for directory in \
+    "$(nova_phase1_root_path "/${NOVA_PHASE8_LOCAL_RELATIVE_PATH}")" \
+    "$(nova_phase1_root_path "/${NOVA_PHASE8_STATE_PARENT_RELATIVE_PATH}")" \
+    "$NOVA_PHASE8_STATE_DIR"; do
+    if [[ -L "$directory" || ( -e "$directory" && ! -d "$directory" ) ]]; then
+      nova_phase1_error "Syncthing state path is not a safe directory."
+      return 1
+    fi
+    mkdir -p -- "$directory"
+    chown "${NOVA_PHASE8_USER}:${NOVA_PHASE8_USER}" -- "$directory"
+    chmod 0700 -- "$directory"
+  done
 }
 
 nova_phase8_regular_file() {
@@ -172,9 +190,7 @@ nova_phase8_main() {
   nova_phase8_install_package
   nova_phase8_state_paths
   systemctl stop "$NOVA_PHASE8_SERVICE" >/dev/null 2>&1 || true
-  mkdir -p -- "$NOVA_PHASE8_STATE_DIR"
-  chown "${NOVA_PHASE8_USER}:${NOVA_PHASE8_USER}" -- "$NOVA_PHASE8_STATE_DIR"
-  chmod 0700 -- "$NOVA_PHASE8_STATE_DIR"
+  nova_phase8_prepare_state_directories
   nova_phase8_restore_state
   nova_phase8_prepare_backup_access
   nova_phase8_prepare_folder_marker

@@ -12,7 +12,6 @@ readonly -a NOVA_PHASE1_SECRET_NAMES=(
   "DYNDNS_URL"
   "CAMERA_URL"
   "TOKEN"
-  "ADGUARD_PASSWORD_HASH"
   "WG_EASY_PASSWORD"
 )
 
@@ -461,6 +460,11 @@ nova_phase1_parse_secrets_file() {
 
     key="${line%%=*}"
     value="${line#*=}"
+    if [[ "$key" == "ADGUARD_PASSWORD_HASH" ]]; then
+      # Deprecated legacy value: AdGuard's authoritative recovery YAML now
+      # contains its own password hash. Never copy or display this value.
+      continue
+    fi
     if ! nova_phase1_is_expected_name "$key"; then
       if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
         nova_phase1_error "Unexpected variable name in ${source_description}: ${key}"
