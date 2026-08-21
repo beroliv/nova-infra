@@ -893,10 +893,10 @@ entfernt werden, damit Caddy sie unter der wiederhergestellten Authority neu
 ausstellt. `instance.uuid` und `autosave.json` sowie alte Leaf-Zertifikate sind
 nicht Bestandteil des Restores. Private CA-Schlüssel und anderes geheimes
 Zertifikatsmaterial dürfen niemals im Git-Repository von `nova-infra` gespeichert
-werden. Eine erfolgreiche Wiederherstellung wird markiert und bei späteren
-Läufen nicht erneut überschrieben; partielle oder unsichere Backups führen zu
-einem kontrollierten Abbruch. Ein vorhandener CA-Ordner mit fehlenden Dateien
-wird niemals stillschweigend als „kein Restore“ behandelt.
+werden. Ein erneuter Lauf mit demselben vollständigen Backup ist sicher und
+deterministisch; partielle oder unsichere Backups führen zu einem kontrollierten
+Abbruch. Ein vorhandener CA-Ordner mit fehlenden Dateien wird niemals
+stillschweigend als „kein Restore“ behandelt.
 
 ### 7.6 Backup und Syncthing
 

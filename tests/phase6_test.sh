@@ -33,7 +33,6 @@ grep -Fq 'NOVA_PHASE6_BEGIN_MARKER' "$PHASE"
 grep -Fq 'target_leaf_dir="${data_dir}/caddy/certificates/local"' "$PHASE"
 grep -Fq 'rm -rf -- "$target_leaf_dir"' "$PHASE"
 grep -Fq 'rmdir -- "$target_authority"' "$PHASE"
-grep -Fq 'nova-infra-ca-restored' "$PHASE"
 if grep -Fq 'root.crt" "$source_real/root.crt"' "$PHASE"; then
   printf '%s\n' 'Phase 6 must copy the complete authority through the staged restore.' >&2
   exit 1

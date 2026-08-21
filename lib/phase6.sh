@@ -7,7 +7,6 @@ readonly NOVA_PHASE6_BEGIN_MARKER="# BEGIN NOVA-INFRA HOSTS"
 readonly NOVA_PHASE6_END_MARKER="# END NOVA-INFRA HOSTS"
 readonly NOVA_PHASE6_CADDYFILE_RELATIVE_PATH="opt/vaultwarden/Caddyfile"
 readonly NOVA_PHASE6_CADDY_DATA_RELATIVE_PATH="opt/vaultwarden/data/caddy/data"
-readonly NOVA_PHASE6_CADDY_CA_MARKER_RELATIVE_PATH="opt/vaultwarden/data/caddy/.nova-infra-ca-restored"
 readonly NOVA_PHASE6_CADDY_RECOVERY_RELATIVE_PATH="backup/caddy/pki/authorities/local"
 readonly NOVA_PHASE6_CADDY_AUTHORITY_RELATIVE_PATH="caddy/pki/authorities/local"
 
@@ -90,26 +89,15 @@ EOF
 }
 
 nova_phase6_restore_caddy_ca() {
-  local data_dir marker recovery_root recovery_real source_dir source_real
-  local target_pki target_authority target_leaf_dir staging_file marker_file mounted_uuid file mode
+  local data_dir recovery_root recovery_real source_dir source_real
+  local target_pki target_authority target_leaf_dir staging_file mounted_uuid file mode
   data_dir="$(nova_phase1_root_path "/${NOVA_PHASE6_CADDY_DATA_RELATIVE_PATH}")"
-  marker="$(nova_phase1_root_path "/${NOVA_PHASE6_CADDY_CA_MARKER_RELATIVE_PATH}")"
   target_pki="${data_dir}/caddy/pki"
   target_authority="${data_dir}/${NOVA_PHASE6_CADDY_AUTHORITY_RELATIVE_PATH}"
   target_leaf_dir="${data_dir}/caddy/certificates/local"
-  if [[ -L "$data_dir" || ( -e "$data_dir" && ! -d "$data_dir" ) || -L "$marker" || ( -e "$marker" && ! -f "$marker" ) ]]; then
-    nova_phase1_error "Caddy data or CA marker path is unsafe."
+  if [[ -L "$data_dir" || ( -e "$data_dir" && ! -d "$data_dir" ) ]]; then
+    nova_phase1_error "Caddy data path is unsafe."
     return 1
-  fi
-  if [[ -f "$marker" ]]; then
-    for file in root.crt root.key intermediate.crt intermediate.key; do
-      [[ -f "${target_authority}/${file}" && ! -L "${target_authority}/${file}" ]] || {
-        nova_phase1_error "Caddy CA marker exists but the complete authority is missing."
-        return 1
-      }
-    done
-    nova_phase1_ok "Existing restored Caddy local CA preserved."
-    return 0
   fi
 
   nova_phase1_discover_recovery
@@ -171,12 +159,6 @@ nova_phase6_restore_caddy_ca() {
   fi
   mv -- "$staging_file" "$target_authority"
   rm -rf -- "$target_leaf_dir"
-  mkdir -p -- "$(dirname -- "$marker")"
-  marker_file="$(mktemp "${marker}.candidate.XXXXXX")"
-  printf '%s\n' 'nova-infra Caddy local CA restored' > "$marker_file"
-  chmod 0644 -- "$marker_file"
-  chown root:root -- "$marker_file"
-  mv -f -- "$marker_file" "$marker"
   if ! nova_phase6_recreate_caddy >/dev/null; then
     nova_phase1_error "Caddy could not be started after local CA restoration."
     nova_phase1_cleanup_recovery || true
