@@ -79,11 +79,12 @@ EOF
 
 nova_phase6_restore_caddy_ca() {
   local data_dir marker recovery_root recovery_real source_dir source_real
-  local target_pki target_authority staging_file marker_file mounted_uuid file mode
+  local target_pki target_authority target_leaf_dir staging_file marker_file mounted_uuid file mode
   data_dir="$(nova_phase1_root_path "/${NOVA_PHASE6_CADDY_DATA_RELATIVE_PATH}")"
   marker="$(nova_phase1_root_path "/${NOVA_PHASE6_CADDY_CA_MARKER_RELATIVE_PATH}")"
   target_pki="${data_dir}/caddy/pki"
   target_authority="${data_dir}/${NOVA_PHASE6_CADDY_AUTHORITY_RELATIVE_PATH}"
+  target_leaf_dir="${data_dir}/caddy/certificates/local"
   if [[ -L "$data_dir" || ( -e "$data_dir" && ! -d "$data_dir" ) || -L "$marker" || ( -e "$marker" && ! -f "$marker" ) ]]; then
     nova_phase1_error "Caddy data or CA marker path is unsafe."
     return 1
@@ -148,7 +149,7 @@ nova_phase6_restore_caddy_ca() {
     rmdir -- "$target_authority"
   fi
   mv -- "$staging_file" "$target_authority"
-  rm -rf -- "${target_pki}/certificates"
+  rm -rf -- "$target_leaf_dir"
   mkdir -p -- "$(dirname -- "$marker")"
   marker_file="$(mktemp "${marker}.candidate.XXXXXX")"
   printf '%s\n' 'nova-infra Caddy local CA restored' > "$marker_file"

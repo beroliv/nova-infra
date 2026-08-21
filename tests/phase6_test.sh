@@ -10,7 +10,8 @@ grep -Fq 'NOVA_PHASE6_CADDY_RECOVERY_RELATIVE_PATH="backup/caddy/pki/authorities
 grep -Fq 'NOVA_PHASE6_CADDY_AUTHORITY_RELATIVE_PATH="caddy/pki/authorities/local"' "$PHASE"
 grep -Fq 'root.crt root.key intermediate.crt intermediate.key' "$PHASE"
 grep -Fq 'nova_phase6_restore_caddy_ca' "$PHASE"
-grep -Fq 'rm -rf -- "${target_pki}/certificates"' "$PHASE"
+grep -Fq 'target_leaf_dir="${data_dir}/caddy/certificates/local"' "$PHASE"
+grep -Fq 'rm -rf -- "$target_leaf_dir"' "$PHASE"
 grep -Fq 'rmdir -- "$target_authority"' "$PHASE"
 grep -Fq 'nova-infra-ca-restored' "$PHASE"
 if grep -Fq 'root.crt" "$source_real/root.crt"' "$PHASE"; then
