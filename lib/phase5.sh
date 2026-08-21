@@ -9,12 +9,15 @@ readonly NOVA_PHASE5_APPLIANCE_MARKER_RELATIVE_PATH="opt/vaultwarden/.vaultwarde
 readonly NOVA_PHASE5_APPLIANCE_COMPOSE_RELATIVE_PATH="opt/vaultwarden/docker-compose.yml"
 readonly NOVA_PHASE5_APPLIANCE_CADDYFILE_RELATIVE_PATH="opt/vaultwarden/Caddyfile"
 readonly NOVA_PHASE5_APPLIANCE_DATA_RELATIVE_PATH="opt/vaultwarden/data"
+readonly NOVA_PHASE5_CADDY_DATA_RELATIVE_PATH="opt/vaultwarden/data/caddy/data"
+readonly NOVA_PHASE5_CADDY_AUTHORITY_RELATIVE_PATH="opt/vaultwarden/data/caddy/data/caddy/pki/authorities/local"
+readonly NOVA_PHASE5_CADDY_RECOVERY_RELATIVE_PATH="backup/caddy/pki/authorities/local"
 
 nova_phase5_require_commands() {
   local command_name
   local missing=0
 
-  for command_name in curl docker grep; do
+  for command_name in chmod chown cp curl dirname docker findmnt grep mkdir mktemp mv readlink; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
       nova_phase1_error "Required Vaultwarden Appliance command is missing: ${command_name}"
       missing=1
@@ -72,6 +75,76 @@ nova_phase5_install_appliance() {
   fi
 }
 
+nova_phase5_preseed_caddy_ca() {
+  local data_dir caddy_root authority recovery_root recovery_real source_dir source_real
+  local parent staging_file mounted_uuid file mode
+  data_dir="$(nova_phase1_root_path "/${NOVA_PHASE5_CADDY_DATA_RELATIVE_PATH}")"
+  caddy_root="$(dirname -- "$data_dir")"
+  authority="$(nova_phase1_root_path "/${NOVA_PHASE5_CADDY_AUTHORITY_RELATIVE_PATH}")"
+  for parent in "$caddy_root" "$data_dir" "${data_dir}/caddy" \
+    "${data_dir}/caddy/pki" "${data_dir}/caddy/pki/authorities"; do
+    if [[ -L "$parent" || ( -e "$parent" && ! -d "$parent" ) ]]; then
+      nova_phase1_error "Caddy preseed path is unsafe: ${parent}"
+      return 1
+    fi
+  done
+
+  nova_phase1_discover_recovery
+  recovery_root="$NOVA_PHASE1_RECOVERY_ROOT"
+  if [[ -z "$recovery_root" ]]; then
+    nova_phase1_info "INFRA-RECOVERY is unavailable; Caddy will create a new CA."
+    return 0
+  fi
+  source_dir="${recovery_root}/${NOVA_PHASE5_CADDY_RECOVERY_RELATIVE_PATH}"
+  if [[ ! -e "$source_dir" && ! -L "$source_dir" ]]; then
+    nova_phase1_cleanup_recovery || return 1
+    nova_phase1_info "No Caddy CA backup found on INFRA-RECOVERY; Caddy will create a new CA."
+    return 0
+  fi
+  if [[ -L "$source_dir" || ! -d "$source_dir" ]]; then
+    nova_phase1_error "INFRA-RECOVERY Caddy authority directory is missing or unsafe."
+    nova_phase1_cleanup_recovery || true
+    return 1
+  fi
+  recovery_real="$(readlink -f -- "$recovery_root")"
+  source_real="$(readlink -f -- "$source_dir")"
+  if [[ "$source_real" != "${recovery_real}/${NOVA_PHASE5_CADDY_RECOVERY_RELATIVE_PATH}" ]]; then
+    nova_phase1_error "Caddy recovery authority resolves outside INFRA-RECOVERY."
+    nova_phase1_cleanup_recovery || true
+    return 1
+  fi
+  mounted_uuid="$(findmnt -rn -T "$source_real" -o UUID 2>/dev/null || true)"
+  if [[ -n "$NOVA_PHASE1_RECOVERY_UUID" && "$mounted_uuid" != "$NOVA_PHASE1_RECOVERY_UUID" ]]; then
+    nova_phase1_error "Caddy recovery authority is not on the validated recovery filesystem."
+    nova_phase1_cleanup_recovery || true
+    return 1
+  fi
+  for file in root.crt root.key intermediate.crt intermediate.key; do
+    if [[ -L "${source_real}/${file}" || ! -f "${source_real}/${file}" ]]; then
+      nova_phase1_error "INFRA-RECOVERY Caddy authority is incomplete."
+      nova_phase1_cleanup_recovery || true
+      return 1
+    fi
+  done
+  mkdir -p -- "$(dirname -- "$authority")"
+  if [[ -e "$authority" || -L "$authority" ]]; then
+    nova_phase1_error "Caddy authority destination already exists during fresh preseed."
+    nova_phase1_cleanup_recovery || true
+    return 1
+  fi
+  staging_file="$(mktemp -d "${authority}.candidate.XXXXXX")"
+  for file in root.crt root.key intermediate.crt intermediate.key; do
+    cp -- "${source_real}/${file}" "${staging_file}/${file}"
+    mode=0644
+    [[ "$file" == *.key ]] && mode=0600
+    chmod "$mode" -- "${staging_file}/${file}"
+    chown root:root -- "${staging_file}/${file}"
+  done
+  mv -- "$staging_file" "$authority"
+  nova_phase1_cleanup_recovery || return 1
+  nova_phase1_ok "Complete Caddy local CA preseeded before the Vaultwarden Appliance starts."
+}
+
 nova_phase5_check_containers() {
   local container running
   for container in vaultwarden caddy; do
@@ -94,6 +167,7 @@ nova_phase5_main() {
   nova_phase5_require_phase4c
   nova_phase5_check_existing_installation
   if [[ "$NOVA_PHASE5_APPLIANCE_STATE" == "absent" ]]; then
+    nova_phase5_preseed_caddy_ca
     nova_phase5_install_appliance
     nova_phase5_check_existing_installation
   else

@@ -873,10 +873,11 @@ folgende Vorgaben:
 
 #### 7.5.4 Zertifikate und interne CA
 
-Die persistierende lokale Caddy-CA kann beim Disaster Recovery optional aus
-dem geschützten Recovery-Medium wiederhergestellt werden. Fehlt der dortige
-Caddy-CA-Ordner, bleibt die von der Appliance frisch erzeugte CA bestehen. Die
-vollständige Authority
+Die persistierende lokale Caddy-CA kann bei einer frischen Appliance-Installation
+optional vor dem ersten Caddy-Start aus dem geschützten Recovery-Medium
+wiederhergestellt werden. Fehlt der dortige Caddy-CA-Ordner, erzeugt die
+Appliance ihre CA normal; bei einer bereits gültigen Appliance wird die
+vorhandene CA nicht ersetzt. Die vollständige Authority
 liegt unter:
 
 ```text
@@ -887,16 +888,14 @@ INFRA-RECOVERY/backup/caddy/pki/authorities/local/
 └── intermediate.key
 ```
 
-Die vier Dateien werden vor der ersten Nutzung der Caddy-Konfiguration
-vollständig übernommen. Neu erzeugte lokale Leaf-Zertifikate dürfen dabei
-entfernt werden, damit Caddy sie unter der wiederhergestellten Authority neu
-ausstellt. `instance.uuid` und `autosave.json` sowie alte Leaf-Zertifikate sind
-nicht Bestandteil des Restores. Private CA-Schlüssel und anderes geheimes
-Zertifikatsmaterial dürfen niemals im Git-Repository von `nova-infra` gespeichert
-werden. Ein erneuter Lauf mit demselben vollständigen Backup ist sicher und
-deterministisch; partielle oder unsichere Backups führen zu einem kontrollierten
-Abbruch. Ein vorhandener CA-Ordner mit fehlenden Dateien wird niemals
-stillschweigend als „kein Restore“ behandelt.
+Die vier Dateien werden vor dem Appliance-Bootstrap vollständig in den finalen
+Persistenzpfad übernommen. Dadurch stellt Caddy seine Leaf-Zertifikate direkt
+unter der wiederhergestellten Authority aus; eine nachträgliche CA-Ersetzung oder
+Leaf-Bereinigung ist nicht erforderlich. `instance.uuid`, `autosave.json` und
+andere Caddy-Laufzeitdaten werden nicht angefasst. Private CA-Schlüssel und
+anderes geheimes Zertifikatsmaterial dürfen niemals im Git-Repository von
+`nova-infra` gespeichert werden. Partielle oder unsichere Backups führen zu
+einem kontrollierten Abbruch.
 
 ### 7.6 Backup und Syncthing
 
@@ -1578,6 +1577,11 @@ installiert. Anschließend wird eine gültige vorhandene
 Vaultwarden-Backupgeneration manuell über die von der Appliance bereitgestellte
 Restore-Funktion wiederhergestellt. Diese Generation stammt normalerweise aus
 der regulären Vaultwarden-Backuparchitektur und nicht von `INFRA-RECOVERY`.
+
+Bei einer frischen Appliance-Installation wird eine vollständige optionale
+Caddy-Authority aus `INFRA-RECOVERY` vor dem Appliance-Start vorgelegt. Fehlt
+dieses Artefakt, erzeugt die Appliance eine neue CA; eine vorhandene gültige
+Appliance-CA wird bei normalen Wiederholungsläufen nicht ersetzt.
 
 Die Vaultwarden-Backups enthalten gemäß der bestehenden Appliance-Spezifikation
 auch die benötigten persistenten Caddy-Daten einschließlich der internen CA. So

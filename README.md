@@ -145,20 +145,21 @@ Unbound noch die Host-Firewallpolitik. Hauptversionswechsel von wg-easy bleiben
 manuell; Watchtower oder andere automatische Container-Updater werden nicht
 installiert.
 
+Phase 5 delegiert Vaultwarden und Caddy an die bestehende Appliance. Bei einer
+frischen Installation wird eine vollständige optionale Caddy-Authority aus
+`INFRA-RECOVERY/backup/caddy/pki/authorities/local/` vor dem Appliance-Start in
+den finalen Persistenzpfad vorgelegt. Fehlt dieses Backup, erzeugt Caddy seine
+CA normal; ein unvollständiges Backup bricht kontrolliert ab. Bei bestehenden
+Appliance-Installationen wird die vorhandene CA nicht ersetzt.
+
 Phase 6 ergänzt die interne HTTPS-Caddyfile der bestehenden
 `vaultwarden-appliance` um die Nova-Hosts `wg-easy.lan`, `adguard-nova.lan`,
 `adguard-arc.lan`, `ds3.lan`, `syncthing-ds3.lan` und `syncthing-nova.lan` mit
 `tls internal`. Es wird kein zweiter Caddy gestartet; die Appliance-Caddyfile
-und ihre CA-Daten bleiben maßgeblich. Die vorhandene lokale Caddy-Authority kann
-bei der Erstinstallation vollständig aus
-`INFRA-RECOVERY/backup/caddy/pki/authorities/local/` wiederhergestellt werden;
-die Ergänzung ist markiert und idempotent. AdGuard Home wird dabei über seinen
-Web-Port 3000 angesprochen. Das Caddy-CA-Backup auf INFRA-RECOVERY ist optional:
-Fehlt es, bleibt die frisch erzeugte Caddy-CA bestehen; ein vollständiges Backup
-wird wiederhergestellt, ein vorhandenes unvollständiges Backup führt zum sicheren
-Abbruch. Wenn die Caddyfile tatsächlich geändert wurde, wird ausschließlich der
-Caddy-Container neu erstellt, damit der Bind-Mount die neue Datei sieht; bei
-unverändertem Inhalt erfolgt keine unnötige Neuerstellung.
+und ihre CA-Daten bleiben maßgeblich. Die Ergänzung ist markiert, wird in place
+geschrieben und ist idempotent. Nach erfolgreicher Validierung wird der laufende
+Caddy direkt neu geladen. AdGuard Home wird dabei über seinen Web-Port 3000
+angesprochen.
 
 Phase 7 stellt AdGuard Home als offiziellen Docker-Container unter `/opt/adguard`
 mit `network_mode: host` bereit. Die vollständige bewährte Konfiguration wird
