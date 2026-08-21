@@ -41,6 +41,14 @@ nova_phase6_require_appliance() {
   fi
 }
 
+nova_phase6_recreate_caddy() {
+  local appliance_dir compose_file
+  appliance_dir="$(nova_phase1_root_path "/${NOVA_PHASE5_APPLIANCE_DIR_RELATIVE_PATH}")"
+  compose_file="$(nova_phase1_root_path "/${NOVA_PHASE5_APPLIANCE_COMPOSE_RELATIVE_PATH}")"
+  docker compose --project-directory "$appliance_dir" -f "$compose_file" \
+    up -d --force-recreate caddy
+}
+
 nova_phase6_host_block() {
   cat <<'EOF'
 # BEGIN NOVA-INFRA HOSTS
@@ -208,15 +216,31 @@ nova_phase6_install_caddy_hosts() {
   chown root:root -- "$backup_file"
   mv -f -- "$temporary_file" "$caddyfile"
 
-  if ! docker exec caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null; then
+  if ! nova_phase6_recreate_caddy >/dev/null; then
     mv -f -- "$backup_file" "$caddyfile"
-    nova_phase1_error "The updated Caddyfile failed validation; the previous configuration was restored."
+    nova_phase6_recreate_caddy >/dev/null 2>&1 || true
+    nova_phase1_error "Caddy recreation failed; the previous configuration was restored."
     return 1
   fi
-  if ! docker exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null; then
+  if ! docker exec caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null; then
     mv -f -- "$backup_file" "$caddyfile"
-    docker exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 || true
-    nova_phase1_error "Caddy reload failed; the previous configuration was restored."
+    nova_phase6_recreate_caddy >/dev/null 2>&1 || true
+    nova_phase1_error "The recreated Caddy configuration failed validation; the previous configuration was restored."
+    return 1
+  fi
+  for hostname in vault.lan wg-easy.lan adguard-nova.lan adguard-arc.lan \
+    ds3.lan syncthing-ds3.lan syncthing-nova.lan; do
+    if ! docker exec caddy grep -Fq "$hostname" /etc/caddy/Caddyfile; then
+      mv -f -- "$backup_file" "$caddyfile"
+      nova_phase6_recreate_caddy >/dev/null 2>&1 || true
+      nova_phase1_error "The recreated Caddy container does not contain expected host ${hostname}."
+      return 1
+    fi
+  done
+  if ! docker exec caddy grep -Fq "$NOVA_PHASE6_BEGIN_MARKER" /etc/caddy/Caddyfile; then
+    mv -f -- "$backup_file" "$caddyfile"
+    nova_phase6_recreate_caddy >/dev/null 2>&1 || true
+    nova_phase1_error "The recreated Caddy container does not contain the Nova host marker."
     return 1
   fi
   rm -f -- "$backup_file"
