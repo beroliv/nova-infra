@@ -15,7 +15,7 @@ nova_phase6_require_commands() {
   local command_name
   local missing=0
 
-  for command_name in awk cat cmp cp dirname docker findmnt grep mkdir mktemp mv readlink rm rmdir systemctl chmod chown; do
+  for command_name in awk cat cmp cp dirname docker findmnt grep mkdir mktemp mv readlink rm rmdir chmod chown; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
       nova_phase1_error "Required Nova Caddy command is missing: ${command_name}"
       missing=1
@@ -45,6 +45,12 @@ nova_phase6_recreate_caddy() {
   local compose_file
   compose_file="$(nova_phase1_root_path "/${NOVA_PHASE5_APPLIANCE_COMPOSE_RELATIVE_PATH}")"
   docker compose -f "$compose_file" up -d --force-recreate caddy
+}
+
+nova_phase6_stop_caddy() {
+  local compose_file
+  compose_file="$(nova_phase1_root_path "/${NOVA_PHASE5_APPLIANCE_COMPOSE_RELATIVE_PATH}")"
+  docker compose -f "$compose_file" stop caddy
 }
 
 nova_phase6_host_block() {
@@ -144,7 +150,11 @@ nova_phase6_restore_caddy_ca() {
     fi
   done
 
-  systemctl stop caddy >/dev/null 2>&1 || docker stop caddy >/dev/null 2>&1 || true
+  if ! nova_phase6_stop_caddy >/dev/null; then
+    nova_phase1_error "Caddy could not be stopped before local CA restoration."
+    nova_phase1_cleanup_recovery || true
+    return 1
+  fi
   mkdir -p -- "${target_pki}/authorities"
   staging_file="$(mktemp -d "${target_authority}.candidate.XXXXXX")"
   for file in root.crt root.key intermediate.crt intermediate.key; do

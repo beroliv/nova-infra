@@ -14,6 +14,15 @@ grep -Fq 'root.crt root.key intermediate.crt intermediate.key' "$PHASE"
 grep -Fq 'nova_phase6_restore_caddy_ca' "$PHASE"
 grep -Fq 'up -d --force-recreate caddy' "$PHASE"
 grep -Fq 'docker compose -f "$compose_file" up -d --force-recreate caddy' "$PHASE"
+grep -Fq 'docker compose -f "$compose_file" stop caddy' "$PHASE"
+if grep -Fq 'systemctl stop caddy' "$PHASE"; then
+  printf '%s\n' 'Phase 6 must stop Caddy through the appliance Compose project.' >&2
+  exit 1
+fi
+if grep -Fq 'caddy-root-ca.crt' "$PHASE"; then
+  printf '%s\n' 'Phase 6 must not depend on the convenience CA export.' >&2
+  exit 1
+fi
 if grep -Fq 'docker compose --project-directory' "$PHASE"; then
   printf '%s\n' 'Phase 6 must not depend on the nova-infra Compose project context.' >&2
   exit 1
