@@ -13,6 +13,11 @@ grep -Fq 'if [[ ! -e "$source_dir" && ! -L "$source_dir" ]]; then' "$PHASE"
 grep -Fq 'root.crt root.key intermediate.crt intermediate.key' "$PHASE"
 grep -Fq 'nova_phase6_restore_caddy_ca' "$PHASE"
 grep -Fq 'up -d --force-recreate caddy' "$PHASE"
+grep -Fq 'docker compose -f "$compose_file" up -d --force-recreate caddy' "$PHASE"
+if grep -Fq 'docker compose --project-directory' "$PHASE"; then
+  printf '%s\n' 'Phase 6 must not depend on the nova-infra Compose project context.' >&2
+  exit 1
+fi
 grep -Fq 'if cmp -s -- "$temporary_file" "$caddyfile"; then' "$PHASE"
 grep -Fq 'docker exec caddy grep -Fq "$hostname" /etc/caddy/Caddyfile' "$PHASE"
 grep -Fq 'NOVA_PHASE6_BEGIN_MARKER' "$PHASE"

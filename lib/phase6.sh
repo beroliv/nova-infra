@@ -42,11 +42,9 @@ nova_phase6_require_appliance() {
 }
 
 nova_phase6_recreate_caddy() {
-  local appliance_dir compose_file
-  appliance_dir="$(nova_phase1_root_path "/${NOVA_PHASE5_APPLIANCE_DIR_RELATIVE_PATH}")"
+  local compose_file
   compose_file="$(nova_phase1_root_path "/${NOVA_PHASE5_APPLIANCE_COMPOSE_RELATIVE_PATH}")"
-  docker compose --project-directory "$appliance_dir" -f "$compose_file" \
-    up -d --force-recreate caddy
+  docker compose -f "$compose_file" up -d --force-recreate caddy
 }
 
 nova_phase6_host_block() {
@@ -169,7 +167,7 @@ nova_phase6_restore_caddy_ca() {
   chmod 0644 -- "$marker_file"
   chown root:root -- "$marker_file"
   mv -f -- "$marker_file" "$marker"
-  if ! docker start caddy >/dev/null; then
+  if ! nova_phase6_recreate_caddy >/dev/null; then
     nova_phase1_error "Caddy could not be started after local CA restoration."
     nova_phase1_cleanup_recovery || true
     return 1
@@ -226,6 +224,12 @@ nova_phase6_install_caddy_hosts() {
     mv -f -- "$backup_file" "$caddyfile"
     nova_phase6_recreate_caddy >/dev/null 2>&1 || true
     nova_phase1_error "The recreated Caddy configuration failed validation; the previous configuration was restored."
+    return 1
+  fi
+  if [[ "$(docker inspect --format '{{.State.Running}}' caddy 2>/dev/null || true)" != "true" ]]; then
+    mv -f -- "$backup_file" "$caddyfile"
+    nova_phase6_recreate_caddy >/dev/null 2>&1 || true
+    nova_phase1_error "The recreated Caddy container is not running; the previous configuration was restored."
     return 1
   fi
   for hostname in vault.lan wg-easy.lan adguard-nova.lan adguard-arc.lan \
