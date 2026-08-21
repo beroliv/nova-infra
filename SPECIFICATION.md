@@ -873,8 +873,10 @@ folgende Vorgaben:
 
 #### 7.5.4 Zertifikate und interne CA
 
-Die persistierende lokale Caddy-CA wird beim Disaster Recovery bevorzugt aus
-dem geschützten Recovery-Medium wiederhergestellt. Die vollständige Authority
+Die persistierende lokale Caddy-CA kann beim Disaster Recovery optional aus
+dem geschützten Recovery-Medium wiederhergestellt werden. Fehlt der dortige
+Caddy-CA-Ordner, bleibt die von der Appliance frisch erzeugte CA bestehen. Die
+vollständige Authority
 liegt unter:
 
 ```text
@@ -893,7 +895,8 @@ nicht Bestandteil des Restores. Private CA-Schlüssel und anderes geheimes
 Zertifikatsmaterial dürfen niemals im Git-Repository von `nova-infra` gespeichert
 werden. Eine erfolgreiche Wiederherstellung wird markiert und bei späteren
 Läufen nicht erneut überschrieben; partielle oder unsichere Backups führen zu
-einem kontrollierten Abbruch.
+einem kontrollierten Abbruch. Ein vorhandener CA-Ordner mit fehlenden Dateien
+wird niemals stillschweigend als „kein Restore“ behandelt.
 
 ### 7.6 Backup und Syncthing
 

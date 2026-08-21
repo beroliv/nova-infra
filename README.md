@@ -153,7 +153,10 @@ und ihre CA-Daten bleiben maßgeblich. Die vorhandene lokale Caddy-Authority kan
 bei der Erstinstallation vollständig aus
 `INFRA-RECOVERY/backup/caddy/pki/authorities/local/` wiederhergestellt werden;
 die Ergänzung ist markiert und idempotent. AdGuard Home wird dabei über seinen
-Web-Port 3000 angesprochen.
+Web-Port 3000 angesprochen. Das Caddy-CA-Backup auf INFRA-RECOVERY ist optional:
+Fehlt es, bleibt die frisch erzeugte Caddy-CA bestehen; ein vollständiges Backup
+wird wiederhergestellt, ein vorhandenes unvollständiges Backup führt zum sicheren
+Abbruch.
 
 Phase 7 stellt AdGuard Home als offiziellen Docker-Container unter `/opt/adguard`
 mit `network_mode: host` bereit. Die vollständige bewährte Konfiguration wird

@@ -107,6 +107,11 @@ nova_phase6_restore_caddy_ca() {
     return 0
   fi
   source_dir="${recovery_root}/${NOVA_PHASE6_CADDY_RECOVERY_RELATIVE_PATH}"
+  if [[ ! -e "$source_dir" && ! -L "$source_dir" ]]; then
+    nova_phase1_cleanup_recovery || return 1
+    nova_phase1_info "No Caddy CA backup found on INFRA-RECOVERY; keeping current Caddy CA."
+    return 0
+  fi
   if [[ -L "$source_dir" || ! -d "$source_dir" ]]; then
     nova_phase1_error "INFRA-RECOVERY Caddy authority directory is missing or unsafe."
     nova_phase1_cleanup_recovery || true
