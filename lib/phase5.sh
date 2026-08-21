@@ -17,7 +17,7 @@ nova_phase5_require_commands() {
   local command_name
   local missing=0
 
-  for command_name in chmod chown cp curl dirname docker findmnt grep mkdir mktemp mv readlink; do
+  for command_name in chmod chown cp curl dirname docker find findmnt grep mkdir mktemp mv readlink; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
       nova_phase1_error "Required Vaultwarden Appliance command is missing: ${command_name}"
       missing=1
@@ -62,8 +62,50 @@ nova_phase5_check_existing_installation() {
     nova_phase1_ok "Existing valid Vaultwarden Appliance installation detected."
     return 0
   fi
+  if nova_phase5_is_safe_caddy_preseed "$appliance_dir"; then
+    NOVA_PHASE5_APPLIANCE_STATE="preseeded"
+    nova_phase1_ok "Only the validated Caddy CA preseed is present; continuing fresh Appliance installation."
+    return 0
+  fi
   nova_phase1_error "The Vaultwarden Appliance path exists without a valid complete installation."
   return 1
+}
+
+nova_phase5_is_safe_caddy_preseed() {
+  local appliance_dir="$1"
+  local authority="${appliance_dir}/data/caddy/data/caddy/pki/authorities/local"
+  local path expected allowed
+  local -a expected_dirs=(
+    "$appliance_dir/data"
+    "$appliance_dir/data/caddy"
+    "$appliance_dir/data/caddy/data"
+    "$appliance_dir/data/caddy/data/caddy"
+    "$appliance_dir/data/caddy/data/caddy/pki"
+    "$appliance_dir/data/caddy/data/caddy/pki/authorities"
+    "$authority"
+  )
+  local -a expected_files=(
+    "$authority/root.crt"
+    "$authority/root.key"
+    "$authority/intermediate.crt"
+    "$authority/intermediate.key"
+  )
+  for path in "${expected_dirs[@]}"; do
+    [[ -d "$path" && ! -L "$path" ]] || return 1
+  done
+  for path in "${expected_files[@]}"; do
+    [[ -f "$path" && ! -L "$path" ]] || return 1
+  done
+  while IFS= read -r path; do
+    allowed=0
+    for expected in "${expected_dirs[@]}" "${expected_files[@]}"; do
+      if [[ "$path" == "$expected" ]]; then
+        allowed=1
+        break
+      fi
+    done
+    (( allowed == 1 )) || return 1
+  done < <(find "$appliance_dir" -mindepth 1 -print)
 }
 
 nova_phase5_install_appliance() {
@@ -168,6 +210,9 @@ nova_phase5_main() {
   nova_phase5_check_existing_installation
   if [[ "$NOVA_PHASE5_APPLIANCE_STATE" == "absent" ]]; then
     nova_phase5_preseed_caddy_ca
+    nova_phase5_install_appliance
+    nova_phase5_check_existing_installation
+  elif [[ "$NOVA_PHASE5_APPLIANCE_STATE" == "preseeded" ]]; then
     nova_phase5_install_appliance
     nova_phase5_check_existing_installation
   else
