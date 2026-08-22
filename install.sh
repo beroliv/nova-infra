@@ -49,7 +49,7 @@ nova_bootstrap_checkout() {
       exit 1
     fi
   else
-    chown -R admin:admin "$checkout"
+    chown --no-dereference admin:admin "$checkout" "$checkout/.git"
     remote="$(runuser -u admin -- git -C "$checkout" remote get-url origin 2>/dev/null || true)"
     if [[ "$remote" != "$NOVA_BOOTSTRAP_REPOSITORY" ]]; then
       printf '[ERROR] Existing bootstrap checkout has an unexpected origin.\n' >&2
