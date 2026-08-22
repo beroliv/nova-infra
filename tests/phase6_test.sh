@@ -10,6 +10,7 @@ grep -Fq 'if cmp -s -- "$temporary_file" "$caddyfile"; then' "$PHASE"
 grep -Fq 'cat "$temporary_file" > "$caddyfile"' "$PHASE"
 grep -Fq 'docker exec caddy caddy validate' "$PHASE"
 grep -Fq 'docker exec caddy caddy reload' "$PHASE"
+grep -Fq 'Nova Caddy hosts are already present; validating and reloading the mounted configuration.' "$PHASE"
 grep -Fq 'docker exec caddy grep -Fq "$hostname" /etc/caddy/Caddyfile' "$PHASE"
 if grep -Eq 'nova_phase6_(restore_caddy_ca|recreate_caddy|stop_caddy)|certificates/local|docker compose' "$PHASE"; then
   printf '%s\n' 'Phase 6 must only manage the Nova Caddy host block.' >&2

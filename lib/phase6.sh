@@ -101,7 +101,16 @@ nova_phase6_install_caddy_hosts() {
   chown root:root -- "$temporary_file"
   if cmp -s -- "$temporary_file" "$caddyfile"; then
     rm -f -- "$temporary_file"
-    nova_phase1_ok "Nova Caddy hosts are already present and unchanged."
+    nova_phase1_info "Nova Caddy hosts are already present; validating and reloading the mounted configuration."
+    if ! docker exec caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null; then
+      nova_phase1_error "The existing Caddy configuration failed validation."
+      return 1
+    fi
+    if ! docker exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null; then
+      nova_phase1_error "Caddy reload failed for the existing configuration."
+      return 1
+    fi
+    nova_phase1_ok "Nova Caddy hosts are already present and the mounted configuration was reloaded."
     return 0
   fi
 

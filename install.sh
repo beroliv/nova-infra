@@ -211,7 +211,6 @@ if [[ "$NOVA_INSTALL_PHASES" == "11" || "$NOVA_INSTALL_PHASES" == "12" || "$NOVA
   nova_phase11_main
 fi
 if [[ "$NOVA_INSTALL_PHASES" == "12" || "$NOVA_INSTALL_PHASES" == "13" ]]; then
-  nova_phase11_main
   nova_phase12_main
 fi
 if [[ "$NOVA_INSTALL_PHASES" == "13" ]]; then

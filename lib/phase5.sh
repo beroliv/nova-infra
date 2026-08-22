@@ -7,6 +7,8 @@ readonly NOVA_PHASE5_APPLIANCE_INSTALLER_URL="https://raw.githubusercontent.com/
 readonly NOVA_PHASE5_APPLIANCE_DIR_RELATIVE_PATH="opt/vaultwarden"
 readonly NOVA_PHASE5_APPLIANCE_MARKER_RELATIVE_PATH="opt/vaultwarden/.vaultwarden-appliance"
 readonly NOVA_PHASE5_APPLIANCE_COMPOSE_RELATIVE_PATH="opt/vaultwarden/docker-compose.yml"
+readonly NOVA_PHASE5_APPLIANCE_OVERRIDE_COMPOSE_RELATIVE_PATH="opt/vaultwarden/docker-compose.override.yml"
+readonly NOVA_PHASE5_APPLIANCE_VWCTL_COMPOSE_RELATIVE_PATH="opt/vaultwarden/docker-compose.vwctl.yml"
 readonly NOVA_PHASE5_APPLIANCE_CADDYFILE_RELATIVE_PATH="opt/vaultwarden/Caddyfile"
 readonly NOVA_PHASE5_APPLIANCE_DATA_RELATIVE_PATH="opt/vaultwarden/data"
 readonly NOVA_PHASE5_CADDY_DATA_RELATIVE_PATH="opt/vaultwarden/data/caddy/data"
@@ -37,11 +39,13 @@ nova_phase5_require_phase4c() {
 }
 
 nova_phase5_check_existing_installation() {
-  local appliance_dir marker compose_file caddyfile data_dir
+  local appliance_dir marker compose_file override_compose_file vwctl_compose_file caddyfile data_dir
 
   appliance_dir="$(nova_phase1_root_path "/${NOVA_PHASE5_APPLIANCE_DIR_RELATIVE_PATH}")"
   marker="$(nova_phase1_root_path "/${NOVA_PHASE5_APPLIANCE_MARKER_RELATIVE_PATH}")"
   compose_file="$(nova_phase1_root_path "/${NOVA_PHASE5_APPLIANCE_COMPOSE_RELATIVE_PATH}")"
+  override_compose_file="$(nova_phase1_root_path "/${NOVA_PHASE5_APPLIANCE_OVERRIDE_COMPOSE_RELATIVE_PATH}")"
+  vwctl_compose_file="$(nova_phase1_root_path "/${NOVA_PHASE5_APPLIANCE_VWCTL_COMPOSE_RELATIVE_PATH}")"
   caddyfile="$(nova_phase1_root_path "/${NOVA_PHASE5_APPLIANCE_CADDYFILE_RELATIVE_PATH}")"
   data_dir="$(nova_phase1_root_path "/${NOVA_PHASE5_APPLIANCE_DATA_RELATIVE_PATH}")"
 
@@ -56,6 +60,8 @@ nova_phase5_check_existing_installation() {
   fi
   if [[ -f "$marker" && ! -L "$marker" \
     && -f "$compose_file" && ! -L "$compose_file" \
+    && -f "$override_compose_file" && ! -L "$override_compose_file" \
+    && -f "$vwctl_compose_file" && ! -L "$vwctl_compose_file" \
     && -f "$caddyfile" && ! -L "$caddyfile" \
     && -d "$data_dir" && ! -L "$data_dir" ]]; then
     NOVA_PHASE5_APPLIANCE_STATE="existing"

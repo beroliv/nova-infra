@@ -13,6 +13,10 @@ grep -Fq 'Only the validated Caddy CA preseed is present; continuing fresh Appli
 grep -Fq 'nova_phase5_is_safe_caddy_preseed' "$PHASE"
 grep -Fq 'find "$appliance_dir" -mindepth 1 -print' "$PHASE"
 grep -Fq 'mv -- "$staging_file" "$authority"' "$PHASE"
+grep -Fq 'NOVA_PHASE5_APPLIANCE_OVERRIDE_COMPOSE_RELATIVE_PATH="opt/vaultwarden/docker-compose.override.yml"' "$PHASE"
+grep -Fq 'NOVA_PHASE5_APPLIANCE_VWCTL_COMPOSE_RELATIVE_PATH="opt/vaultwarden/docker-compose.vwctl.yml"' "$PHASE"
+grep -Fq '&& -f "$override_compose_file" && ! -L "$override_compose_file"' "$PHASE"
+grep -Fq '&& -f "$vwctl_compose_file" && ! -L "$vwctl_compose_file"' "$PHASE"
 if ! awk '
   /^[[:space:]]+nova_phase5_preseed_caddy_ca$/ { preseed=NR }
   /^[[:space:]]+nova_phase5_install_appliance$/ { install=NR }
