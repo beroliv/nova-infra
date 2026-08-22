@@ -3,10 +3,49 @@
 Reproduzierbarer Aufbau des Raspberry-Pi-Infrastruktur-Nodes Nova gemäß
 [`SPECIFICATION.md`](SPECIFICATION.md).
 
+## Installation, Recovery und Wiederholung
+
+Der offizielle Einstieg ist immer:
+
+```shell
+curl -fsSL https://raw.githubusercontent.com/beroliv/nova-infra/main/install.sh | sudo bash
+```
+
+Der Curl-Einstieg funktioniert auf einer frischen unterstützten Installation,
+bei einer Disaster-Recovery mit angeschlossenem `INFRA-RECOVERY`-Medium und bei
+späteren Wiederholungen auf einem bereits eingerichteten Nova. Er stellt den
+persistenten Checkout unter `/home/admin/nova-infra` bereit beziehungsweise
+aktualisiert ihn sicher und führt anschließend den echten Installer aus diesem
+Checkout aus. Nichtcommittete lokale Änderungen werden dabei nicht überschrieben;
+der Lauf bricht stattdessen verständlich ab.
+
+### Frische Installation
+
+Auf einem leeren Debian-13-/Raspberry-Pi-5-System startet der Befehl den
+vollständigen Phasenaufbau. Das optionale `INFRA-RECOVERY`-Medium wird, falls
+vorhanden, ausschließlich lesend verwendet. Für einen vollständigen produktiven
+Restore werden die in den späteren Phasen benötigten Restore-Artefakte und
+Secrets vom Medium beziehungsweise aus den dokumentierten manuellen Backups
+bereitgestellt.
+
+### Disaster-Recovery
+
+Das Medium muss das ext4-Dateisystemlabel `INFRA-RECOVERY` tragen. Der Installer
+findet es über Label und UUID, verwendet einen vorhandenen sicheren Mount oder
+mountet es temporär read-only. Secrets, AdGuard-/Syncthing-Daten und eine
+optionale Caddy-CA werden daraus übernommen; Vaultwarden-Nutzdaten bleiben der
+manuellen Restore-Funktion der Vaultwarden-Appliance zugeordnet.
+
+### Normaler Rerun
+
+Der gleiche Curl-Befehl ist für einen normalen Wiederholungslauf vorgesehen.
+Ein vorhandener sauberer Checkout wird auf `main` per Fast-Forward aktualisiert,
+und korrekte lokale Zustände werden idempotent erhalten. Ein verschmutzter
+Checkout oder eine unerwartete Remote-Adresse führt zu einem sicheren Abbruch.
+
 ## Implementierungsstand
 
-Aktuell sind Phase 1, Phase 2, Phase 3, Phase 4a, Phase 4b und Phase 4c
-implementiert. Phase 1 umfasst:
+Aktuell sind Phase 1 bis Phase 13 implementiert. Phase 1 umfasst:
 
 - zerstörungsfreie Prüfung auf Raspberry Pi 5, ARM64 und Debian 13/trixie
 - Prüfung von Root-Rechten, benötigten Befehlen, sicheren Zielpfaden sowie
@@ -197,14 +236,6 @@ verwalteten Compose-Stacks (`/opt/vaultwarden`, `/opt/wg-easy`, `/opt/adguard`,
 `/opt/prusa`) und führt erst nach erfolgreicher Aktualisierung aller vorhandenen
 Stacks `docker image prune -a -f` aus. Native Dienste und persistente Daten werden
 nicht verändert.
-
-Der endgültige curl-Einstieg wird erst mit der weiteren Installer-Orchestrierung
-bereitgestellt; die implementierten Phasen werden derzeit aus einem
-Repository-Checkout gestartet:
-
-```shell
-sudo ./install.sh
-```
 
 Fehlt `INFRA-RECOVERY` oder ein einzelner Wert, wird ein eindeutiger
 `CHANGE_ME_*`-Platzhalter geschrieben und nur der ungelöste Variablenname
