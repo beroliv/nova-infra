@@ -47,6 +47,11 @@ echo
 echo "${C_RED}${C_BOLD}System${C_RESET}"
 echo "  Uptime:  $(uptime -p)"
 echo "  Load:    $(cut -d' ' -f1-3 /proc/loadavg)"
+if [ -e /run/reboot-required ]; then
+  echo "  Reboot:  ${C_YELLOW}required${C_RESET}"
+else
+  echo "  Reboot:  ${C_GREEN}not required${C_RESET}"
+fi
 
 # ---------- resources ----------
 echo
