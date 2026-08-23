@@ -114,7 +114,7 @@ nova_phase9_write_compose() {
       '      - path: /opt/prusa/prusa.env' \
       '        format: raw' \
       '  prusa-monitor:' \
-      '    image: alpine:3.20' \
+      '    image: alpine:latest' \
       '    container_name: prusa-monitor' \
       '    restart: unless-stopped' \
       '    volumes:' \
