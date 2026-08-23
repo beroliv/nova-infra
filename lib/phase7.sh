@@ -2,7 +2,7 @@
 
 # Phase 7 only: deploy the official AdGuard Home image with host networking.
 
-readonly NOVA_PHASE7_IMAGE="adguard/adguardhome:v0.107.78"
+readonly NOVA_PHASE7_IMAGE="adguard/adguardhome:latest"
 readonly NOVA_PHASE7_INSTALL_DIR_RELATIVE_PATH="opt/adguard"
 readonly NOVA_PHASE7_CONF_DIR_RELATIVE_PATH="opt/adguard/conf"
 readonly NOVA_PHASE7_WORK_DIR_RELATIVE_PATH="opt/adguard/work"
