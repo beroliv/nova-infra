@@ -10,6 +10,7 @@ readonly NOVA_PHASE4C_INSTALL_DIR_RELATIVE_PATH="opt/wg-easy"
 readonly NOVA_PHASE4C_COMPOSE_RELATIVE_PATH="opt/wg-easy/compose.yml"
 readonly NOVA_PHASE4C_DATA_RELATIVE_PATH="opt/wg-easy/data"
 readonly NOVA_PHASE4C_DATABASE_RELATIVE_PATH="opt/wg-easy/data/wg-easy.db"
+readonly NOVA_PHASE4C_SYSCTL_RELATIVE_PATH="etc/sysctl.d/99-nova-wg-easy.conf"
 readonly NOVA_PHASE4C_MARKER_RELATIVE_PATH="var/lib/nova-infra/phase4c-complete"
 
 NOVA_PHASE4C_RESOLVER_FINGERPRINT=""
@@ -17,7 +18,7 @@ NOVA_PHASE4C_RESOLVER_FINGERPRINT=""
 nova_phase4c_require_commands() {
   local command_name
   local missing=0
-  local -a commands=(chmod chown cmp cp dirname docker grep mkdir mktemp mv rm sleep stat)
+  local -a commands=(chmod chown cmp cp dirname docker grep mkdir mktemp mv rm sleep stat sysctl)
 
   for command_name in "${commands[@]}"; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
@@ -40,13 +41,14 @@ nova_phase4c_require_phase4b() {
 }
 
 nova_phase4c_check_safe_paths() {
-  local local_secrets install_dir data_dir compose_target marker source entry path display optional
+  local local_secrets install_dir data_dir compose_target sysctl_target marker source entry path display optional
   local -a directories files
 
   local_secrets="$(nova_phase1_root_path "/${NOVA_PHASE1_LOCAL_SECRET_RELATIVE_PATH}")"
   install_dir="$(nova_phase1_root_path "/${NOVA_PHASE4C_INSTALL_DIR_RELATIVE_PATH}")"
   data_dir="$(nova_phase1_root_path "/${NOVA_PHASE4C_DATA_RELATIVE_PATH}")"
   compose_target="$(nova_phase1_root_path "/${NOVA_PHASE4C_COMPOSE_RELATIVE_PATH}")"
+  sysctl_target="$(nova_phase1_root_path "/${NOVA_PHASE4C_SYSCTL_RELATIVE_PATH}")"
   marker="$(nova_phase1_root_path "/${NOVA_PHASE4C_MARKER_RELATIVE_PATH}")"
   directories=(
     "$(nova_phase1_root_path "/opt")|/opt|0"
@@ -55,6 +57,7 @@ nova_phase4c_check_safe_paths() {
   )
   files=(
     "${compose_target}|/opt/wg-easy/compose.yml"
+    "${sysctl_target}|/etc/sysctl.d/99-nova-wg-easy.conf"
     "$(nova_phase1_root_path "/${NOVA_PHASE4C_DATABASE_RELATIVE_PATH}")|/opt/wg-easy/data/wg-easy.db"
     "${marker}|/var/lib/nova-infra/phase4c-complete"
   )
@@ -78,6 +81,33 @@ nova_phase4c_check_safe_paths() {
     nova_phase2_assert_safe_file_target "$path" "$display"
   done
   nova_phase1_ok "Phase 4c Compose, persistent-data, secret-source, and state paths passed safety checks."
+}
+
+nova_phase4c_install_host_sysctls() {
+  local target temporary_file
+
+  target="$(nova_phase1_root_path "/${NOVA_PHASE4C_SYSCTL_RELATIVE_PATH}")"
+  temporary_file="$(mktemp "${target%/*}/.99-nova-wg-easy.conf.XXXXXX")"
+  if ! printf '%s\n' \
+    'net.ipv4.ip_forward=1' \
+    'net.ipv4.conf.all.src_valid_mark=1' > "$temporary_file"; then
+    rm -f -- "$temporary_file"
+    nova_phase1_error "Could not stage the wg-easy host sysctl configuration."
+    return 1
+  fi
+  chmod 0644 -- "$temporary_file"
+  if [[ -f "$target" ]] && cmp -s -- "$temporary_file" "$target"; then
+    rm -f -- "$temporary_file"
+  else
+    mv -f -- "$temporary_file" "$target"
+  fi
+  chmod 0644 -- "$target"
+  chown root:root -- "$target"
+  if ! sysctl -p "$target" >/dev/null; then
+    nova_phase1_error "Could not apply the wg-easy host sysctl configuration."
+    return 1
+  fi
+  nova_phase1_ok "WireGuard host sysctls are configured without changing IPv6 settings."
 }
 
 nova_phase4c_capture_network_fingerprints() {
@@ -233,6 +263,7 @@ nova_phase4c_deploy() {
   database="$(nova_phase1_root_path "/${NOVA_PHASE4C_DATABASE_RELATIVE_PATH}")"
   nova_phase4c_prepare_directory "$install_dir" 0755
   nova_phase4c_prepare_directory "$data_dir" 0700
+  nova_phase4c_install_host_sysctls
   nova_phase4c_install_compose
 
   if ! nova_phase4c_compose config --quiet >/dev/null; then

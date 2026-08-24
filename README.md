@@ -133,6 +133,9 @@ bereit:
 
 - Docker-Image `ghcr.io/wg-easy/wg-easy:15` und fester Containername `wg-easy`
 - Host-Networking ohne eigene Docker-Netzwerke oder `ports:`-Mappings
+- Die erforderlichen IPv4-WireGuard-Sysctls werden wegen Host-Networking
+  idempotent auf dem Host in `/etc/sysctl.d/99-nova-wg-easy.conf` gesetzt und
+  angewendet; Container-Sysctls und unnötige IPv6-Änderungen entfallen.
 - WireGuard über den extern erreichbaren UDP-Port `51824`
 - Weboberfläche über `0.0.0.0:51821`; eine Weiterleitung ins Internet wird nicht
   eingerichtet und bleibt durch die externe Router-Konfiguration verhindert

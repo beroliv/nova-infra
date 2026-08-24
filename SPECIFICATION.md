@@ -367,6 +367,10 @@ bereits in Phase 3 installierte Docker-/Compose-Laufzeit:
 - fester Containername: `wg-easy`
 - `network_mode: host`
 - keine `ports:`-Mappings und kein benutzerdefiniertes Docker-Netzwerk
+- Die erforderlichen IPv4-WireGuard-Sysctls (`net.ipv4.ip_forward=1` und
+  `net.ipv4.conf.all.src_valid_mark=1`) werden wegen Host-Networking auf dem
+  Host in `/etc/sysctl.d/99-nova-wg-easy.conf` verwaltet und angewendet;
+  Container-Sysctls und unnötige IPv6-Änderungen entfallen.
 - keine Verwendung von `latest`
 - keine automatische Aktualisierung auf spätere Hauptversionen
 - Hauptversionswechsel erfolgen ausschließlich manuell
