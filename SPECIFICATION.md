@@ -268,14 +268,9 @@ Atlas-Einträge werden entfernt.
 - DNSSEC in AdGuard: deaktiviert
 - Filterung und Protection: aktiviert
 
-Resolver-, Cache- und DNSSEC-Aufgaben liegen bei Unbound. Die DNS-Funktion muss
-später durch Healthchecks geprüft werden.
-
 AdGuard Home wird beim Neuaufbau erst nahe dem Ende installiert und konfiguriert.
-Unbound muss zuvor auf Port 5335 unabhängig getestet sein, und alle benötigten
-APT-Downloads sowie Docker-Pulls müssen abgeschlossen sein. Dadurch bleibt die
-bestehende DNS-Funktion bis zum bewusst ausgeführten finalen DNS-Umschalten
-unangetastet.
+Alle benötigten APT-Downloads sowie Docker-Pulls müssen abgeschlossen sein. Die
+gesicherte AdGuard-Konfiguration bleibt dabei bis zum Start unverändert.
 
 Die vollständige produktive AdGuard-Konfiguration einschließlich Web-UI-Hash,
 Filterlisten, Rewrites und Clients wird als geschütztes Restore-Artefakt aus
@@ -284,34 +279,9 @@ Klartextpasswort wird weder benötigt noch gespeichert.
 
 #### 4.1.2 Upstreams, Fallback und Bootstrap
 
-Der zukünftige produktive AdGuard verwendet genau zwei reguläre interne
-DNS-Upstreams:
-
-- `127.0.0.1:5335` — lokaler Unbound auf Nova
-- `192.168.0.193:5335` — Unbound auf Arc
-
-`upstream_mode: parallel` wird beibehalten. Die beiden internen
-Unbound-Instanzen bilden die gewünschte DNS-Redundanz.
-
-Nicht migriert werden:
-
-- `192.168.0.192:5335` — ehemaliger Atlas-Upstream
-- der derzeit auskommentierte öffentliche Quad9-DoH-Upstream
-
-Atlas wird ausschließlich als Testsystem verwendet und ist kein Bestandteil der
-produktiven DNS-Infrastruktur.
-
-Die bisherigen öffentlichen Fallback-Resolver werden nicht übernommen. Google,
-Cloudflare und direkte öffentliche Quad9-Resolver dürfen nicht als
-AdGuard-Fallback verwendet werden. `fallback_dns` bleibt im neuen Sollzustand
-leer. DNS soll sichtbar fehlschlagen, wenn beide vorgesehenen internen
-Unbound-Instanzen nicht verfügbar sind, statt die definierte Resolver-Kette
-unbemerkt zu umgehen.
-
-Davon unabhängig dürfen die bestehenden `bootstrap_dns` beibehalten werden:
-
-- `9.9.9.10`
-- `149.112.112.10`
+Die gesicherte `AdGuardHome.yaml` ist die verbindliche Quelle für Upstreams,
+Fallback- und Bootstrap-Einstellungen. Der Installer erzeugt diese Werte nicht
+neu und überschreibt sie beim Restore nicht.
 
 #### 4.1.3 Lokale DNS-Rewrites und Caddy
 
@@ -374,138 +344,12 @@ erfolgreicher Wiederherstellung wird die lokale Konfiguration bei erneuten
 Läufen nicht erneut vom Medium überschrieben. Fehlt das Restore-Artefakt, wird
 keine unvollständige AdGuard-Konfiguration erzeugt oder gestartet.
 
-### 4.2 Unbound
+### 4.2 DNS-Zusammenspiel
 
-- Unbound dient als lokaler Resolver.
-- Installierte Debian-Paketversion: Unbound 1.22.0
-- Unbound läuft nativ als `unbound.service`.
-- Das Debian-13-systemd-Unit startet Unbound mit
-  `/usr/sbin/unbound -d -p`. Durch `-p` wird kein PID-File verwendet; die von
-  `nova-infra` verwaltete Konfiguration darf daher keine `pidfile`-Direktive
-  definieren.
-- Als bevorzugte Forwarder werden die Quad9-Adressen `9.9.9.9` und
-  `149.112.112.112` verwendet.
-- `forward-first: yes` bewirkt, dass Quad9 bevorzugt und bei Bedarf die rekursive
-  Auflösung als Fallback verwendet wird.
-- Die bestehende getestete und optimierte Unbound-Konfiguration muss unverändert
-  übernommen werden.
-- Die Unbound-Konfiguration darf im Rahmen dieses Projekts nicht eigenständig
-  „optimiert“ oder inhaltlich neu entworfen werden.
-- Die alten Dateien `50-custom.conf` und `99-modules.conf` sind historischer
-  Bestand und werden nicht automatisch migriert.
-- Beim Neuaufbau muss die Konfiguration zunächst mit `unbound-checkconf` validiert
-  werden.
-- Anschließend muss die DNS- beziehungsweise Resolver-Funktion durch einen
-  Healthcheck geprüft werden.
-
-#### Konfigurationslayout und DNSSEC
-
-Die Debian-Paketkonfiguration bleibt soweit praktisch unverändert. `nova-infra`
-installiert genau eine eigene, eindeutig verwaltete Include-Datei unter:
-
-```text
-/etc/unbound/unbound.conf.d/nova.conf
-```
-
-Die produktive historische Doppelung zwischen `/etc/unbound/unbound.conf` und
-`50-custom.conf` wird nicht reproduziert. Insbesondere werden `50-custom.conf`
-und `99-modules.conf` nicht migriert. Paketverwaltete Dateien werden nicht
-unnötig ersetzt oder dupliziert.
-
-Für den DNSSEC-Trust-Anchor bleibt ausschließlich die Integration des
-Debian-Pakets maßgeblich:
-
-```text
-/etc/unbound/unbound.conf.d/root-auto-trust-anchor-file.conf
-```
-
-Die von `nova-infra` verwaltete Datei definiert deshalb keine zusätzliche
-`auto-trust-anchor-file`-Direktive. Die Modulkonfiguration bleibt
-`module-config: "validator iterator"`.
-
-#### Verbindliche Server- und Zugriffseinstellungen
-
-Die folgenden Werte sind der verbindliche Zielzustand:
-
-| Einstellung | Wert |
-| --- | --- |
-| `chroot` | `""` |
-| `verbosity` | `1` |
-| `interface` | `0.0.0.0` |
-| `port` | `5335` |
-| `do-ip4` | `yes` |
-| `do-ip6` | `no` |
-| `do-udp` | `yes` |
-| `do-tcp` | `yes` |
-| `root-hints` | `/var/lib/unbound/root.hints` |
-| `hide-identity` | `yes` |
-| `hide-version` | `yes` |
-| `harden-algo-downgrade` | `yes` |
-| `harden-referral-path` | `yes` |
-| `harden-glue` | `yes` |
-| `harden-dnssec-stripped` | `yes` |
-| `harden-below-nxdomain` | `yes` |
-| `qname-minimisation` | `yes` |
-| `aggressive-nsec` | `yes` |
-
-Folgende Zugriffskontrollen werden exakt übernommen:
-
-| Netz | Aktion |
-| --- | --- |
-| `127.0.0.0/8` | `allow` |
-| `10.0.0.0/8` | `allow` |
-| `192.168.0.0/16` | `allow` |
-| `10.8.0.0/16` | `allow` |
-
-Unbound lauscht damit über IPv4 auf Port 5335 und übernimmt nicht Port 53.
-IPv6 bleibt für Unbound deaktiviert.
-
-#### Zu übernehmende Cache- und Performance-Einstellungen
-
-Die folgenden bestätigten Einstellungen sind das Ergebnis früherer Tests und
-müssen beim Neuaufbau übernommen werden:
-
-| Einstellung | Wert |
-| --- | --- |
-| `cache-min-ttl` | `3600` |
-| `cache-max-ttl` | `86400` |
-| `prefetch` | `yes` |
-| `prefetch-key` | `yes` |
-| `serve-expired` | `yes` |
-| `serve-expired-ttl` | `172800` |
-| `serve-expired-client-timeout` | `1800` |
-| `serve-expired-reply-ttl` | `30` |
-| `num-threads` | `1` |
-| `msg-cache-size` | `128m` |
-| `rrset-cache-size` | `256m` |
-| `so-rcvbuf` | `8m` |
-| `so-sndbuf` | `8m` |
-| `num-queries-per-thread` | `2048` |
-| `outgoing-range` | `2048` |
-| `jostle-timeout` | `200` |
-| `edns-buffer-size` | `1232` |
-
-### 4.3 DNS-Zusammenspiel
-
-Der geplante normale DNS-Pfad lautet:
-
-```text
-Clients
-  -> AdGuard Home auf Nova (TCP/UDP Port 53)
-  -> parallel:
-     - Unbound auf Nova (127.0.0.1:5335)
-     - Unbound auf Arc (192.168.0.193:5335)
-  -> Upstream- beziehungsweise rekursive Auflösung gemäß Unbound-Konfiguration
-```
-
-AdGuard Home übernimmt dabei Filterung und Protection. Die Resolver-Funktion
-einschließlich DNSSEC-Verarbeitung, Cache und eigentlicher Auflösung liegt bei den
-Unbound-Instanzen.
-
-Unbound wird vor AdGuard eingerichtet und unabhängig auf Port 5335 validiert.
-AdGuard übernimmt Port 53 erst in der späten DNS-Phase des Neuaufbaus. Der
-kritische DNS-Wechsel darf nicht vor Abschluss aller Paketdownloads und
-Container-Pulls stattfinden.
+Der normale DNS-Pfad wird vollständig durch die gesicherte AdGuard-Konfiguration
+bestimmt. AdGuard Home übernimmt Filterung, Protection und die dort dokumentierte
+Resolver-Kette auf TCP/UDP-Port 53. `nova-infra` erzeugt keine zusätzliche
+Resolver-Konfiguration und verändert die gesicherte YAML beim Restore nicht.
 
 **TODO:** Konkrete DNS-Healthchecks und erwartete Antworten anhand des produktiven
 Systems festlegen.
@@ -521,6 +365,8 @@ bereits in Phase 3 installierte Docker-/Compose-Laufzeit:
 
 - Image: `ghcr.io/wg-easy/wg-easy:15`
 - fester Containername: `wg-easy`
+- `network_mode: host`
+- keine `ports:`-Mappings und kein benutzerdefiniertes Docker-Netzwerk
 - keine Verwendung von `latest`
 - keine automatische Aktualisierung auf spätere Hauptversionen
 - Hauptversionswechsel erfolgen ausschließlich manuell
@@ -550,10 +396,10 @@ Die bestehende funktionale Nova-Konvention bleibt verbindlich:
 ### 5.2 Weboberfläche, Initialisierung und Persistenz
 
 Die wg-easy-Weboberfläche verwendet intern den v15-Standardport `51821/tcp`.
-In der ersten Ausbaustufe wird dieser Port ausschließlich an `127.0.0.1` des
-Hosts gebunden und weder im LAN noch im WAN direkt veröffentlicht. Der spätere
-Zugriff erfolgt ausschließlich über die gemeinsame interne Caddy-HTTPS-
-Architektur; die Caddy-Integration gehört nicht zur wg-easy-Basisphase.
+Durch Host-Networking sind UDP-Port `51824` und TCP-Port `51821` direkt im
+Host-Netzwerk verfügbar. Eine Weiterleitung ins Internet wird nicht eingerichtet
+und bleibt durch die externe Router-Konfiguration verhindert. Der Zugriff auf die
+Weboberfläche erfolgt über die gemeinsame interne Caddy-HTTPS-Architektur.
 
 Die Erstinitialisierung erfolgt unattended mit dem Benutzernamen `admin` und dem
 Secret `WG_EASY_PASSWORD` aus `/opt/nova-bootstrap/secrets.env`. Fehlt der Wert
@@ -818,7 +664,7 @@ grundsätzlich erhalten:
 
 | Hostname | Backend | TLS | Besonderheit |
 | --- | --- | --- | --- |
-| `vault.lan` | `vaultwarden:80` | internal | HTTP wird auf HTTPS umgeleitet |
+| `vault.lan` | gemäß Appliance-Caddyfile | internal | HTTP wird auf HTTPS umgeleitet |
 | `wg-easy.lan` | `192.168.0.195:51821` | internal | wg-easy-Weboberfläche auf Nova |
 | `adguard-nova.lan` | `192.168.0.195:3000` | internal | AdGuard Home auf Nova |
 | `adguard-arc.lan` | `192.168.0.193:80` | internal | AdGuard Home auf Arc |
@@ -1093,7 +939,7 @@ Der Appliance-eigene Ordner `/opt/vaultwarden/backups` bleibt unverändert; fall
 für den Benutzer `admin` erforderlich, wird ausschließlich die vorhandene
 Backup-Gruppenberechtigung ergänzt, ohne Dateien der Appliance umzueignen oder
 deren Berechtigungen zu lockern. Syncthing bleibt ein nativer Dienst; Docker,
-Caddy, AdGuard, Unbound und die Vaultwarden-Appliance werden in dieser Phase
+Caddy, AdGuard und die Vaultwarden-Appliance werden in dieser Phase
 nicht verändert.
 
 ## 9. 3D-Drucker und Kamera-Upload
@@ -1292,7 +1138,6 @@ sein.
 
 Die Phase prüft aktuell:
 
-- `unbound.service`
 - `unattended-upgrades.service`
 - `dyndns.timer`
 - `syncthing@admin.service`
@@ -1360,7 +1205,7 @@ Raspberry Pi / Debian / ARM64
 Uptime | Temperature | Disk | Load
 
 Services
-AdGuard | Unbound | WireGuard | Syncthing | DynDNS | Backup Timer | ...
+AdGuard | WireGuard | Syncthing | DynDNS | Backup Timer | ...
 
 Containers
 Containername | Status | Laufzeit
@@ -1708,7 +1553,6 @@ getrennt:
 - Basissystem
 - Repositories und Grundpakete
 - Docker
-- Unbound
 - AdGuard Home
 - wg-easy / WireGuard
 - DynDNS
@@ -1794,7 +1638,6 @@ nicht erneut:
 Bewährte produktive Konfigurationen werden bevorzugt als reproduzierbare
 Referenz übernommen. Dies gilt insbesondere für:
 
-- die getestete Unbound-Konfiguration
 - die bereinigte AdGuard-Konfiguration
 - die definierten Caddy-Reverse-Proxy-Einträge
 - systemd-Services und Timer
@@ -1908,8 +1751,8 @@ Jede Phase soll soweit praktisch unabhängig testbar und idempotent sein:
 2. APT-Repositories einrichten, `apt update` und vollständiges Upgrade ausführen
    sowie alle benötigten Pakete installieren.
 3. Docker Engine und Docker Compose bereitstellen.
-4. Basisdienste wie DynDNS, wg-easy / WireGuard und Unbound konfigurieren sowie die
-   MOTD-Grundlage vorbereiten; Unbound unabhängig auf Port 5335 testen.
+4. Basisdienste wie DynDNS und wg-easy / WireGuard konfigurieren sowie die MOTD-
+   Grundlage vorbereiten.
 5. Container einschließlich Vaultwarden-Appliance und Prusa-Komponenten
    bereitstellen sowie die native Syncthing-Integration einrichten.
 6. Die Caddy-Kerninstallation abschließen, interne HTTPS-/CA-Funktion validieren
@@ -1929,7 +1772,6 @@ Installation muss jedoch ein einfacher Abschlusscheck mindestens prüfen können
 
 - Basissystem ist plausibel eingerichtet.
 - Docker-Service läuft.
-- Unbound-Service läuft und antwortet auf dem erwarteten Port.
 - AdGuard-Service läuft und AdGuard antwortet auf Port 53.
 - `wg0` existiert im wg-easy-Container mit der erwarteten Adresse und dem
   erwarteten Listen-Port.
@@ -1983,7 +1825,7 @@ frische Raspberry-Pi-OS-/Debian-13-Basis
 - Basissystem und benötigte Pakete sind reproduzierbar eingerichtet.
 - Alle vorgesehenen systemd Services und Timer sind aktiv und korrekt geplant.
 - Alle vorgesehenen Container laufen mit der erwarteten Konfiguration.
-- AdGuard Home und Unbound liefern funktionierendes DNS.
+- AdGuard Home liefert mit der gesicherten Resolver-Konfiguration funktionierendes DNS.
 - WireGuard erhält die bestehende Routing- und DNS-Funktion.
 - DynDNS aktualisiert wie vorgesehen.
 - Vaultwarden ist nach Restore der separat gesicherten Daten funktionsfähig.
@@ -2055,5 +1897,5 @@ rein lesende Bestandsaufnahme am produktiven Nova geklärt werden. Dabei gilt:
 | 2026-08-09 | Syncthing-Bestandsaufnahme und Sollzustand für die nachgelagerte Vaultwarden-Backup-Replikation ergänzt |
 | 2026-08-09 | DynDNS-Bestandsaufnahme einschließlich Secret-, WireGuard- und Healthcheck-Anforderungen ergänzt |
 | 2026-08-09 | Bestandsaufnahme von WireGuard und PiVPN einschließlich MTU-, Client- und Firewall-Strategie ergänzt |
-| 2026-08-09 | Bestandsaufnahme von Unbound, AdGuard Home und DNS-Architektur ergänzt; Rolle von Atlas präzisiert |
+| 2026-08-09 | Bestandsaufnahme der AdGuard-DNS-Architektur ergänzt; Rolle von Atlas präzisiert |
 | 2026-08-09 | Initiale Erfassung des bisher bekannten Sollzustands |

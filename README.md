@@ -66,22 +66,19 @@ folgende Schritte aus:
   Keyring-Dateien vorbereiten, aber die Anwendungen noch nicht installieren
 - Paket-, Befehls- und systemd-Unit-Verfügbarkeit prüfen
 - `/etc/resolv.conf` auf unveränderten Inhalt prüfen
-- Unbound während der Erstinstallation vor automatischem Start schützen und
-  anschließend inaktiv sowie deaktiviert lassen
 - den vorherigen Aktivierungszustand von `nftables.service` erhalten
 
 Die Basis-Paketmenge lautet:
 
 ```text
 bind9-dnsutils ca-certificates curl git gnupg iproute2 iptables iputils-ping
-jq nftables procps rsync sudo unattended-upgrades unbound unzip wireguard-tools
+jq nftables procps rsync sudo unattended-upgrades unzip wireguard-tools
 xz-utils
 ```
 
 Phase 2 legt keine DNS-Konfiguration an, ändert weder Resolver noch
 Firewall-Regeln und aktiviert keine Dienste späterer Phasen. Insbesondere werden
-noch keine Docker- oder Syncthing-Anwendungen installiert und kein Unbound-
-Laufzeitbetrieb eingerichtet.
+noch keine Docker- oder Syncthing-Anwendungen installiert.
 
 Phase 3 installiert Docker ausschließlich aus dem bereits von Phase 2
 vorbereiteten offiziellen Docker-Repository. Sie umfasst:
@@ -110,35 +107,6 @@ lädt oder startet keinen Test- beziehungsweise Anwendungscontainer. Docker darf
 beim normalen Start seine eigenen Netzwerkregeln verwalten; der Installer legt
 keine zusätzlichen Firewall- oder DNS-Regeln an.
 
-Phase 4a übernimmt anschließend ausschließlich den bereits in Phase 2 aus Debian
-installierten Unbound-Dienst:
-
-- genau eine versionierte Konfiguration wird als
-  `/etc/unbound/unbound.conf.d/nova.conf` installiert
-- die Debian-Hauptkonfiguration und die paketierte DNSSEC-Trust-Anchor-
-  Integration bleiben unverändert
-- `/var/lib/unbound/root.hints` wird reproduzierbar aus den Root-Hints des
-  Debian-Pakets `dns-root-data` bereitgestellt
-- vor der vollständigen Konfigurationsprüfung initialisiert beziehungsweise
-  aktualisiert Debians paketierter `unbound-helper` den ebenfalls paketverwalteten
-  Trust Anchor `/var/lib/unbound/root.key`
-- die Konfiguration wird vor Installation sowie anschließend im vollständigen
-  Debian-Include-Kontext mit `unbound-checkconf` geprüft
-- bei einer fehlgeschlagenen vollständigen Prüfung wird eine vorhandene frühere
-  `nova.conf` wiederhergestellt, bevor der Dienst aktiviert wird
-- Unbound wird als `unbound.service` aktiviert und lauscht ausschließlich über
-  IPv4 auf TCP/UDP-Port 5335, nicht auf Port 53
-- eine unveränderte Wiederholung hält den Dienst aktiv, vermeidet aber einen
-  unnötigen Neustart
-
-Der dokumentierte Resolverpfad verwendet die beiden spezifizierten
-Quad9-Forwarder bevorzugt und fällt mit `forward-first: yes` auf rekursive
-Auflösung zurück; es werden keine weiteren Forwarder ergänzt. Die unabhängige
-Validierung fragt Unbound direkt über `127.0.0.1:5335` ab und prüft normale,
-wiederholte, DNSSEC-authentifizierte sowie absichtlich DNSSEC-fehlerhafte
-Antworten. `/etc/resolv.conf`, Port 53, AdGuard und die Firewall-Konfiguration
-bleiben unverändert.
-
 Phase 4b installiert anschließend die einfache FreeDNS-DynDNS-Integration:
 
 - `/usr/local/bin/dyndns-update.sh` liest ausschließlich `DYNDNS_URL` aus der
@@ -156,7 +124,7 @@ Phase 4b installiert anschließend die einfache FreeDNS-DynDNS-Integration:
 - fehlt der Wert oder ist er noch `CHANGE_ME_DYNDNS_URL`, bleiben Dienst und
   Timer deaktiviert, während der übrige Installer erfolgreich fortfährt
 
-Phase 4b verändert weder `/etc/resolv.conf` noch Unbound, Ports oder
+Phase 4b verändert weder `/etc/resolv.conf` noch Ports oder
 Firewall-Regeln. Vorhandene ältere DynDNS-Dateien werden ohne Ausgabe möglicher
 eingebetteter Secrets deterministisch durch die versionierten Dateien ersetzt.
 
@@ -164,6 +132,7 @@ Phase 4c stellt anschließend wg-easy als WireGuard-Management- und VPN-Dienst
 bereit:
 
 - Docker-Image `ghcr.io/wg-easy/wg-easy:15` und fester Containername `wg-easy`
+- Host-Networking ohne eigene Docker-Netzwerke oder `ports:`-Mappings
 - WireGuard über den extern erreichbaren UDP-Port `51824`
 - Weboberfläche über `0.0.0.0:51821`; eine Weiterleitung ins Internet wird nicht
   eingerichtet und bleibt durch die externe Router-Konfiguration verhindert
@@ -179,8 +148,8 @@ bereit:
 
 Fehlt `WG_EASY_PASSWORD`, bleibt wg-easy ungestartet und Phase 4c wird klar als
 unvollständig gemeldet, ohne den Installer abzubrechen. Phase 4c erzeugt keine
-Clients, installiert weder Caddy noch AdGuard und verändert weder Resolver,
-Unbound noch die Host-Firewallpolitik. Hauptversionswechsel von wg-easy bleiben
+Clients, installiert weder Caddy noch AdGuard und verändert weder Resolver noch
+die Host-Firewallpolitik. Hauptversionswechsel von wg-easy bleiben
 manuell; Watchtower oder andere automatische Container-Updater werden nicht
 installiert.
 
@@ -201,11 +170,11 @@ Caddy direkt neu geladen. AdGuard Home wird dabei über seinen Web-Port 3000
 angesprochen.
 
 Phase 7 stellt AdGuard Home als offiziellen Docker-Container unter `/opt/adguard`
-mit `network_mode: host` bereit. Die vollständige bewährte Konfiguration wird
+mit `network_mode: host` bereit. Die vollständige gesicherte Konfiguration wird
 bei der Erstinstallation byteweise aus
 `INFRA-RECOVERY/backup/adguard/AdGuardHome.yaml` übernommen; dadurch bleiben
 Web-UI-Zugang, Filter, Rewrites und Clients erhalten. Ohne dieses Restore-Artefakt
-wird keine unvollständige Konfiguration gestartet. Caddy und Unbound werden in
+wird keine unvollständige Konfiguration gestartet. Caddy wird in
 dieser Phase nicht verändert.
 
 Phase 8 installiert Syncthing nativ als `syncthing@admin.service`. Auf einem
@@ -256,6 +225,6 @@ Platzhalter stehen in [`secrets.env.example`](secrets.env.example).
 Vor einem Commit kann die Syntax der produktiven Shell-Dateien geprüft werden:
 
 ```shell
-bash -n install.sh lib/phase1.sh lib/phase2.sh lib/phase3.sh lib/phase4a.sh \
+bash -n install.sh lib/phase1.sh lib/phase2.sh lib/phase3.sh \
   lib/phase4b.sh lib/phase4c.sh scripts/dyndns-update.sh
 ```

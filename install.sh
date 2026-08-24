@@ -89,8 +89,6 @@ source "${NOVA_INSTALLER_DIR}/lib/phase1.sh"
 source "${NOVA_INSTALLER_DIR}/lib/phase2.sh"
 # shellcheck source=lib/phase3.sh
 source "${NOVA_INSTALLER_DIR}/lib/phase3.sh"
-# shellcheck source=lib/phase4a.sh
-source "${NOVA_INSTALLER_DIR}/lib/phase4a.sh"
 # shellcheck source=lib/phase4b.sh
 source "${NOVA_INSTALLER_DIR}/lib/phase4b.sh"
 # shellcheck source=lib/phase4c.sh
@@ -118,7 +116,6 @@ readonly NOVA_INSTALL_PHASES="${NOVA_INSTALL_PHASES:-13}"
 if [[ "$NOVA_INSTALL_PHASES" != "1" \
   && "$NOVA_INSTALL_PHASES" != "2" \
   && "$NOVA_INSTALL_PHASES" != "3" \
-  && "$NOVA_INSTALL_PHASES" != "4a" \
   && "$NOVA_INSTALL_PHASES" != "4b" \
   && "$NOVA_INSTALL_PHASES" != "4c" \
   && "$NOVA_INSTALL_PHASES" != "5" \
@@ -130,14 +127,13 @@ if [[ "$NOVA_INSTALL_PHASES" != "1" \
   && "$NOVA_INSTALL_PHASES" != "11" \
   && "$NOVA_INSTALL_PHASES" != "12" \
   && "$NOVA_INSTALL_PHASES" != "13" ]]; then
-  nova_phase1_error "NOVA_INSTALL_PHASES must be 1, 2, 3, 4a, 4b, 4c, 5, 6, 7, 8, 9, 10, 11, 12, or 13."
+  nova_phase1_error "NOVA_INSTALL_PHASES must be 1, 2, 3, 4b, 4c, 5, 6, 7, 8, 9, 10, 11, 12, or 13."
   exit 2
 fi
 
 nova_phase1_main "$@"
 if [[ "$NOVA_INSTALL_PHASES" == "2" \
   || "$NOVA_INSTALL_PHASES" == "3" \
-  || "$NOVA_INSTALL_PHASES" == "4a" \
   || "$NOVA_INSTALL_PHASES" == "4b" \
   || "$NOVA_INSTALL_PHASES" == "4c" \
   || "$NOVA_INSTALL_PHASES" == "5" \
@@ -152,7 +148,6 @@ if [[ "$NOVA_INSTALL_PHASES" == "2" \
   nova_phase2_main
 fi
 if [[ "$NOVA_INSTALL_PHASES" == "3" \
-  || "$NOVA_INSTALL_PHASES" == "4a" \
   || "$NOVA_INSTALL_PHASES" == "4b" \
   || "$NOVA_INSTALL_PHASES" == "4c" \
   || "$NOVA_INSTALL_PHASES" == "5" \
@@ -165,20 +160,6 @@ if [[ "$NOVA_INSTALL_PHASES" == "3" \
   || "$NOVA_INSTALL_PHASES" == "12" \
   || "$NOVA_INSTALL_PHASES" == "13" ]]; then
   nova_phase3_main
-fi
-if [[ "$NOVA_INSTALL_PHASES" == "4a" \
-  || "$NOVA_INSTALL_PHASES" == "4b" \
-  || "$NOVA_INSTALL_PHASES" == "4c" \
-  || "$NOVA_INSTALL_PHASES" == "5" \
-  || "$NOVA_INSTALL_PHASES" == "6" \
-  || "$NOVA_INSTALL_PHASES" == "7" \
-  || "$NOVA_INSTALL_PHASES" == "8" \
-  || "$NOVA_INSTALL_PHASES" == "9" \
-  || "$NOVA_INSTALL_PHASES" == "10" \
-  || "$NOVA_INSTALL_PHASES" == "11" \
-  || "$NOVA_INSTALL_PHASES" == "12" \
-  || "$NOVA_INSTALL_PHASES" == "13" ]]; then
-  nova_phase4a_main
 fi
 if [[ "$NOVA_INSTALL_PHASES" == "4b" || "$NOVA_INSTALL_PHASES" == "4c" || "$NOVA_INSTALL_PHASES" == "5" || "$NOVA_INSTALL_PHASES" == "6" || "$NOVA_INSTALL_PHASES" == "7" || "$NOVA_INSTALL_PHASES" == "8" || "$NOVA_INSTALL_PHASES" == "9" || "$NOVA_INSTALL_PHASES" == "10" || "$NOVA_INSTALL_PHASES" == "11" || "$NOVA_INSTALL_PHASES" == "12" || "$NOVA_INSTALL_PHASES" == "13" ]]; then
   nova_phase4b_main

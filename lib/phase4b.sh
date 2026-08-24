@@ -29,15 +29,15 @@ nova_phase4b_require_commands() {
   (( missing == 0 ))
 }
 
-nova_phase4b_require_phase4a() {
+nova_phase4b_require_phase3() {
   local marker
 
-  marker="$(nova_phase1_root_path "/${NOVA_PHASE4A_MARKER_RELATIVE_PATH}")"
-  if [[ ! -f "$marker" || -L "$marker" ]] || ! grep -Fxq 'phase=4a' "$marker"; then
-    nova_phase1_error "Phase 4b requires a successfully completed Phase 4a marker."
+  marker="$(nova_phase1_root_path "/${NOVA_PHASE3_MARKER_RELATIVE_PATH}")"
+  if [[ ! -f "$marker" || -L "$marker" ]] || ! grep -Fxq 'phase=3' "$marker"; then
+    nova_phase1_error "Phase 4b requires a successfully completed Phase 3 marker."
     return 1
   fi
-  nova_phase1_ok "Phase 4a is complete."
+  nova_phase1_ok "Phase 3 is complete."
 }
 
 nova_phase4b_check_safe_paths() {
@@ -260,9 +260,9 @@ nova_phase4b_write_completion_marker() {
 nova_phase4b_preflight() {
   nova_phase1_info "Phase 4b preflight checks"
   nova_phase4b_require_commands
-  nova_phase4b_require_phase4a
+  nova_phase4b_require_phase3
   nova_phase4b_check_safe_paths
-  nova_phase1_ok "Phase 4b prerequisites are complete; DNS, Unbound, and firewall state remain out of scope."
+    nova_phase1_ok "Phase 4b prerequisites are complete; DNS and firewall state remain out of scope."
 }
 
 nova_phase4b_main() {

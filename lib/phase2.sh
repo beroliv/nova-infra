@@ -18,15 +18,11 @@ readonly -a NOVA_PHASE2_BASE_PACKAGES=(
   "rsync"
   "sudo"
   "unattended-upgrades"
-  "unbound"
   "unzip"
   "wireguard-tools"
   "xz-utils"
 )
 readonly -a NOVA_PHASE2_CRITICAL_UNITS=(
-  "unbound.service"
-  "unbound-resolvconf.service"
-  "unbound-resolvconf.path"
   "nftables.service"
 )
 readonly NOVA_PHASE2_DOCKER_KEY_URL="https://download.docker.com/linux/debian/gpg"
@@ -196,11 +192,6 @@ nova_phase2_prepare_service_safety() {
     NOVA_PHASE2_UNIT_ENABLED_BEFORE["$unit"]="$(nova_phase2_read_unit_state is-enabled "$unit")"
   done
 
-  if [[ "${NOVA_PHASE2_UNIT_ACTIVE_BEFORE[unbound.service]}" == "active" ]]; then
-    nova_phase1_error "Unbound is already active before initial Phase 2; refusing to alter an ambiguous DNS baseline."
-    return 1
-  fi
-
   NOVA_PHASE2_PROTECTION_ACTIVE=1
   for unit in "${NOVA_PHASE2_CRITICAL_UNITS[@]}"; do
     if ! systemctl mask --runtime "$unit" >/dev/null; then
@@ -208,7 +199,7 @@ nova_phase2_prepare_service_safety() {
       return 1
     fi
   done
-  nova_phase1_ok "Critical DNS and firewall package units are protected against first-install auto-start."
+  nova_phase1_ok "Critical firewall package units are protected against first-install auto-start."
 }
 
 nova_phase2_unmask_protected_units() {
@@ -266,23 +257,8 @@ nova_phase2_enforce_service_safety() {
   fi
 
   nova_phase2_unmask_protected_units
-  for unit in "unbound.service" "unbound-resolvconf.service" "unbound-resolvconf.path"; do
-    if nova_phase2_unit_exists "$unit"; then
-      systemctl disable --now "$unit" >/dev/null
-    fi
-  done
   nova_phase2_restore_nftables_baseline
-
-  if systemctl is-active --quiet unbound.service; then
-    nova_phase1_error "Unbound is active after Phase 2; refusing a premature DNS service takeover."
-    return 1
-  fi
-  if [[ "$(nova_phase2_read_unit_state is-enabled unbound.service)" == "enabled" ]]; then
-    nova_phase1_error "Unbound is enabled after Phase 2; dedicated DNS configuration must happen first."
-    return 1
-  fi
-
-  nova_phase1_ok "Unbound remains inactive and disabled; nftables service state matches the pre-install baseline."
+  nova_phase1_ok "nftables service state matches the pre-install baseline."
 }
 
 nova_phase2_best_effort_cleanup() {
@@ -293,11 +269,6 @@ nova_phase2_best_effort_cleanup() {
     nova_phase2_unmask_protected_units || true
   fi
   if (( NOVA_PHASE2_MARKER_EXISTED == 0 )); then
-    for unit in "unbound.service" "unbound-resolvconf.service" "unbound-resolvconf.path"; do
-      if nova_phase2_unit_exists "$unit"; then
-        systemctl disable --now "$unit" >/dev/null 2>&1 || true
-      fi
-    done
     nova_phase2_restore_nftables_baseline >/dev/null 2>&1 || true
   fi
 
@@ -355,7 +326,7 @@ nova_phase2_verify_packages() {
 nova_phase2_verify_commands() {
   local command_name
   local missing=0
-  local -a commands=(curl dig git gpg ip jq nft ping rsync ss sudo sysctl unbound unbound-checkconf unzip wg xz)
+  local -a commands=(curl dig git gpg ip jq nft ping rsync ss sudo sysctl unzip wg xz)
 
   for command_name in "${commands[@]}"; do
     if ! command -v "$command_name" >/dev/null 2>&1; then
@@ -365,10 +336,6 @@ nova_phase2_verify_commands() {
   done
   (( missing == 0 ))
 
-  if ! nova_phase2_unit_exists "unbound.service"; then
-    nova_phase1_error "Expected systemd unit is unavailable after package installation: unbound.service"
-    return 1
-  fi
   if ! nova_phase2_unit_exists "nftables.service"; then
     nova_phase1_error "Expected systemd unit is unavailable after package installation: nftables.service"
     return 1

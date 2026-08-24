@@ -3,6 +3,7 @@ services:
     image: ghcr.io/wg-easy/wg-easy:15
     container_name: wg-easy
     restart: unless-stopped
+    network_mode: host
     entrypoint:
       - /bin/sh
       - -c
@@ -24,9 +25,6 @@ services:
     volumes:
       - "/opt/wg-easy/data:/etc/wireguard"
       - "/lib/modules:/lib/modules:ro"
-    ports:
-      - "0.0.0.0:51824:51824/udp"
-      - "0.0.0.0:51821:51821/tcp"
     cap_add:
       - NET_ADMIN
       - SYS_MODULE

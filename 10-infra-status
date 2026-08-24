@@ -80,7 +80,7 @@ fi
 echo
 echo "${C_RED}${C_BOLD}Services${C_RESET}"
 
-for svc in unbound unattended-upgrades dyndns.timer syncthing@admin; do
+for svc in unattended-upgrades dyndns.timer syncthing@admin; do
 
   # ---- timer ----
   if [[ "$svc" == *.timer ]]; then

@@ -13,8 +13,6 @@ readonly NOVA_PHASE4C_DATABASE_RELATIVE_PATH="opt/wg-easy/data/wg-easy.db"
 readonly NOVA_PHASE4C_MARKER_RELATIVE_PATH="var/lib/nova-infra/phase4c-complete"
 
 NOVA_PHASE4C_RESOLVER_FINGERPRINT=""
-NOVA_PHASE4C_UNBOUND_MAIN_FINGERPRINT=""
-NOVA_PHASE4C_UNBOUND_NOVA_FINGERPRINT=""
 
 nova_phase4c_require_commands() {
   local command_name
@@ -86,29 +84,17 @@ nova_phase4c_capture_network_fingerprints() {
   NOVA_PHASE4C_RESOLVER_FINGERPRINT="$(
     nova_phase2_file_fingerprint "$(nova_phase1_root_path "/etc/resolv.conf")"
   )"
-  NOVA_PHASE4C_UNBOUND_MAIN_FINGERPRINT="$(
-    nova_phase2_file_fingerprint "$(nova_phase1_root_path "/etc/unbound/unbound.conf")"
-  )"
-  NOVA_PHASE4C_UNBOUND_NOVA_FINGERPRINT="$(
-    nova_phase2_file_fingerprint "$(nova_phase1_root_path "/etc/unbound/unbound.conf.d/nova.conf")"
-  )"
 }
 
 nova_phase4c_verify_network_files_unchanged() {
-  local resolver unbound_main unbound_nova
+  local resolver
 
   resolver="$(nova_phase2_file_fingerprint "$(nova_phase1_root_path "/etc/resolv.conf")")"
-  unbound_main="$(nova_phase2_file_fingerprint "$(nova_phase1_root_path "/etc/unbound/unbound.conf")")"
-  unbound_nova="$(
-    nova_phase2_file_fingerprint "$(nova_phase1_root_path "/etc/unbound/unbound.conf.d/nova.conf")"
-  )"
-  if [[ "$resolver" != "$NOVA_PHASE4C_RESOLVER_FINGERPRINT" \
-    || "$unbound_main" != "$NOVA_PHASE4C_UNBOUND_MAIN_FINGERPRINT" \
-    || "$unbound_nova" != "$NOVA_PHASE4C_UNBOUND_NOVA_FINGERPRINT" ]]; then
-    nova_phase1_error "Resolver or Unbound configuration changed during Phase 4c."
+  if [[ "$resolver" != "$NOVA_PHASE4C_RESOLVER_FINGERPRINT" ]]; then
+    nova_phase1_error "Resolver configuration changed during Phase 4c."
     return 1
   fi
-  nova_phase1_ok "Resolver and Unbound configuration remain unchanged."
+  nova_phase1_ok "Resolver configuration remains unchanged."
 }
 
 nova_phase4c_read_password() {

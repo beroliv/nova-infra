@@ -158,7 +158,7 @@ nova_phase7_deploy() {
     nova_phase1_error "AdGuard Home container deployment failed."
     return 1
   fi
-  nova_phase1_ok "AdGuard Home deployment requested; native Unbound and Caddy were not modified."
+  nova_phase1_ok "AdGuard Home deployment requested; Caddy was not modified."
 }
 
 nova_phase7_main() {
