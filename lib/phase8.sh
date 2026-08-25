@@ -154,6 +154,7 @@ nova_phase8_restore_state() {
 nova_phase8_prepare_backup_access() {
   local backup_dir group permissions members
   backup_dir="$(nova_phase1_root_path "/${NOVA_PHASE8_BACKUP_RELATIVE_PATH}")"
+  chmod 0711 -- "$(nova_phase1_root_path "/opt/vaultwarden")"
   if [[ ! -d "$backup_dir" || -L "$backup_dir" ]]; then
     nova_phase1_error "Vaultwarden backup directory is unavailable: /opt/vaultwarden/backups"
     return 1
