@@ -52,7 +52,7 @@ adguard-nova.lan {
 
 adguard-arc.lan {
     tls internal
-    reverse_proxy 192.168.0.193:80
+    reverse_proxy 192.168.0.193:3000
 }
 
 ds3.lan {
