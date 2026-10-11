@@ -113,6 +113,8 @@ nova_phase9_write_compose() {
       '    env_file:' \
       '      - path: /opt/prusa/prusa.env' \
       '        format: raw' \
+      '    environment:' \
+      '      PRUSA_URL: https://camera-service.prusa3d.com/c/snapshot' \
       '  prusa-monitor:' \
       '    image: alpine:latest' \
       '    container_name: prusa-monitor' \
