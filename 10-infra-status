@@ -65,7 +65,18 @@ if have_cmd df; then
   echo "  Disk:    ${USED}/${TOTAL} (${DCOLOR}${PCT}%${C_RESET})"
 fi
 
-have_cmd free && echo "  RAM:     $(free -h | awk '/Mem:/ {print $3 "/" $2}')"
+RAM="$(awk '
+/^MemTotal:[[:space:]]+[0-9]+[[:space:]]+kB$/ { total=$2 }
+/^MemAvailable:[[:space:]]+[0-9]+[[:space:]]+kB$/ { available=$2 }
+END {
+  if (total ~ /^[0-9]+$/ && available ~ /^[0-9]+$/ && total >= available) {
+    printf "%.1f GiB / %.1f GiB", (total - available) / 1048576, total / 1048576
+  } else {
+    print "unavailable"
+  }
+}' /proc/meminfo 2>/dev/null)" || RAM="unavailable"
+[ -n "$RAM" ] || RAM="unavailable"
+echo "  RAM:     $RAM"
 
 TEMP="$(get_temp_c)"
 if [ -n "$TEMP" ]; then
