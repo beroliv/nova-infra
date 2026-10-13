@@ -956,21 +956,21 @@ dokumentiert und später fest in der Konfiguration verwendet werden.
 
 ### 9.2 Kamera-Upload zu Prusa Connect
 
-Der Kamera-Upload wird direkt über das bestehende Docker-Image
-`jtee3d/prusa_connect_rtsp:latest` realisiert. Die Docker-basierte Lösung ist der
+Der Kamera-Upload wird direkt über das gepinnte Docker-Image
+`ghcr.io/s31teg/prusa-rtsp-live:1.0.0` realisiert. Die Docker-basierte Lösung ist der
 verbindliche Sollzustand; eine zwischenzeitlich erwogene native
 systemd-/FFmpeg-Implementierung ist obsolet und wird nicht übernommen. Es wird
 keine eigene Upload-Anwendung entwickelt.
 
-Die Verwendung von `latest` ist derzeit eine bewusste Entscheidung. Eine feste
-Tag- oder Digest-Pinnung darf später neu bewertet werden, falls eine strengere
-Reproduzierbarkeit wichtiger wird; sie ist aktuell keine Anforderung.
+Die feste Version `1.0.0` ist verbindlich, damit Neuinstallationen und
+Wiederholungen denselben getesteten ARM64-Stand verwenden.
 
 Die sensitiven Werte stammen vom Recovery-Medium `INFRA-RECOVERY`:
 
 - `CAMERA_URL` enthält die vollständige RTSP-URL einschließlich der
   Kamera-Zugangsdaten.
-- `TOKEN` enthält das Prusa-Connect-Token.
+- `TOKEN` enthält das Prusa-Connect-Token und wird in `/opt/prusa/prusa.env` als
+  `PRUSA_TOKEN` bereitgestellt.
 
 `CAMERA_URL`, `TOKEN` und andere sensitive Werte dürfen niemals im
 Git-Repository gespeichert werden. Nicht geheime Werte wie Fingerprint,
@@ -979,31 +979,32 @@ versionierte Konfiguration und nicht auf das Recovery-Medium.
 
 Der Kamera-Container erhält einen festen `container_name`, damit der Monitor nicht
 von automatisch erzeugten Compose-Namen abhängt. Als verbindlicher logischer Name
-wird `prusa-connect-rtsp` verwendet.
+wird `prusa-rtsp-live` verwendet.
 
 Phase 9 legt die Compose-Dateien unter `/opt/prusa/` an. Der Upload-Container
-verwendet den festen Namen `prusa-connect-rtsp`; `CAMERA_URL` und `TOKEN` werden
-zur Laufzeit aus `/opt/nova-bootstrap/secrets.env` übergeben. Bei ungelösten
+verwendet den festen Namen `prusa-rtsp-live`; `CAMERA_URL` und `PRUSA_TOKEN`
+werden in `/opt/prusa/prusa.env` aus den bestehenden Bootstrap-Secrets erzeugt.
+Bei ungelösten
 Werten wird der Stack nicht gestartet und nur die Variablennamen werden gemeldet.
 
 ### 9.3 Ausschluss von MediaMTX
 
 Der aktuell auf Nova vorhandene native `mediamtx.service` wird nicht migriert.
 MediaMTX ist Altbestand und entfällt beim Neuaufbau vollständig, weil
-`jtee3d/prusa_connect_rtsp` direkt mit der Kameraquelle arbeiten kann. Der spätere
+`prusa-rtsp-live` direkt mit der Kameraquelle arbeiten kann. Der spätere
 Installer darf MediaMTX nicht installieren.
 
 ### 9.4 Watchdog / Prusa Monitor
 
 Zusätzlich zum Upload-Container wird ein eigener kleiner Watchdog-Container
-benötigt. Der Kamera-Upload über `prusa_connect_rtsp` kann nach längerer Laufzeit
+benötigt. Der Kamera-Upload über `prusa-rtsp-live` kann nach längerer Laufzeit
 beziehungsweise längeren Drucker-Off-Zeiten unzuverlässig werden. Die bewährte
 Lösung startet und stoppt den Upload-Container deshalb gezielt abhängig von der
 Erreichbarkeit des Druckers.
 
 Auch der Monitor wird als Docker-Container und nicht als nativer
 systemd-/FFmpeg-Dienst umgesetzt. Er verwendet für den Kamera-Container den festen
-Namen `prusa-connect-rtsp` und darf nicht von generierten Compose-Namen abhängen.
+Namen `prusa-rtsp-live` und darf nicht von generierten Compose-Namen abhängen.
 
 Die verbindliche Logik lautet:
 
@@ -1049,8 +1050,8 @@ Begründung:
 Zulässige Zustände sind beispielsweise:
 
 - `prusa-monitor` läuft dauerhaft.
-- `prusa-connect-rtsp` läuft, wenn der Drucker erreichbar ist.
-- `prusa-connect-rtsp` ist `stopped` oder `exited`, wenn der Drucker ausgeschaltet
+- `prusa-rtsp-live` läuft, wenn der Drucker erreichbar ist.
+- `prusa-rtsp-live` ist `stopped` oder `exited`, wenn der Drucker ausgeschaltet
   ist.
 
 `stopped` oder `exited` beim Upload-Container ist ausdrücklich nicht automatisch
@@ -1077,7 +1078,7 @@ ausschließlich zum Prusa-Watchdog.
 
 Konzeptionell werden mindestens zwei Komponenten benötigt:
 
-- `jtee3d/prusa_connect_rtsp:latest` als `prusa-connect-rtsp`
+- `ghcr.io/s31teg/prusa-rtsp-live:1.0.0` als `prusa-rtsp-live`
 - ein einfacher Alpine-basierter `prusa-monitor`-Watchdog
 
 MediaMTX gehört ausdrücklich nicht dazu. Die konkrete Compose- und
@@ -1173,7 +1174,7 @@ Dabei gelten folgende Anforderungen:
   abbrechen.
 
 Die erwartete Liste umfasst genau sechs Container: `prusa-monitor`,
-`prusa-connect-rtsp`, `adguardhome`, `wg-easy`, `caddy` und `vaultwarden`.
+`prusa-rtsp-live`, `adguardhome`, `wg-easy`, `caddy` und `vaultwarden`.
 Das MOTD zeigt `X/6` laufende Container und listet alle sechs einzeln, auch wenn
 ein Container gestoppt oder nicht vorhanden ist.
 

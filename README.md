@@ -188,10 +188,13 @@ Vaultwarden-Backupordner `/opt/vaultwarden/backups` bleibt im Besitz der
 Appliance und wird über seine vorhandene Gruppenberechtigung für `admin` lesbar.
 
 Phase 9 stellt unter `/opt/prusa` den Prusa-Kamera-Stack per Docker Compose bereit:
-`prusa-connect-rtsp` verwendet das bestehende Kamera-Image, `prusa-monitor` ist
-ein einfacher Alpine-Container mit Docker-Socket und Ping-Überwachung. Bei
+`prusa-rtsp-live` verwendet `ghcr.io/s31teg/prusa-rtsp-live:1.0.0`,
+`prusa-monitor` ist ein einfacher Alpine-Container mit Docker-Socket und
+Ping-Überwachung. Bei
 `CHANGE_ME_*`-Werten für `CAMERA_URL` oder `TOKEN` bleibt der Stack gestoppt und
 nur die fehlenden Variablennamen werden gemeldet.
+`/opt/prusa/prusa.env` enthält dafür `CAMERA_URL` und `PRUSA_TOKEN`; alte
+`RTSP_URLS`/`TOKENS`-Variablen werden bei der Migration übernommen.
 
 Phase 10 installiert das vorhandene Repository-Skript `10-infra-status` als
 `/etc/update-motd.d/10-infra-status`. Es zeigt die vier relevanten nativen

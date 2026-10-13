@@ -7,8 +7,9 @@ readonly NOVA_PHASE9_COMPOSE_RELATIVE_PATH="opt/prusa/compose.yml"
 readonly NOVA_PHASE9_MONITOR_RELATIVE_PATH="opt/prusa/monitor.sh"
 readonly NOVA_PHASE9_ENV_RELATIVE_PATH="opt/prusa/prusa.env"
 readonly NOVA_PHASE9_SECRETS_RELATIVE_PATH="opt/nova-bootstrap/secrets.env"
-readonly NOVA_PHASE9_CAMERA_IMAGE="jtee3d/prusa_connect_rtsp:latest"
-readonly NOVA_PHASE9_CAMERA_CONTAINER="prusa-connect-rtsp"
+readonly NOVA_PHASE9_CAMERA_IMAGE="ghcr.io/s31teg/prusa-rtsp-live:1.0.0"
+readonly NOVA_PHASE9_CAMERA_CONTAINER="prusa-rtsp-live"
+readonly NOVA_PHASE9_LEGACY_CAMERA_CONTAINER="prusa-connect-rtsp"
 readonly NOVA_PHASE9_MONITOR_CONTAINER="prusa-monitor"
 readonly NOVA_PHASE9_PRINTER_IP="192.168.0.61"
 
@@ -57,12 +58,12 @@ nova_phase9_write_monitor() {
   {
     printf '%s\n' '#!/bin/sh' 'set -eu' '' 'while :; do'
     printf '%s\n' '  if ping -c 1 -W 2 192.168.0.61 >/dev/null 2>&1; then'
-    printf '%s\n' '    running="$(docker inspect -f '\''{{.State.Running}}'\'' prusa-connect-rtsp 2>/dev/null || true)"'
+    printf '%s\n' '    running="$(docker inspect -f '\''{{.State.Running}}'\'' prusa-rtsp-live 2>/dev/null || true)"'
     printf '%s\n' '    if [ "$running" != "true" ]; then'
-    printf '%s\n' '      docker start prusa-connect-rtsp >/dev/null 2>&1 || true'
+    printf '%s\n' '      docker start prusa-rtsp-live >/dev/null 2>&1 || true'
     printf '%s\n' '    fi'
     printf '%s\n' '  else'
-    printf '%s\n' '    docker stop prusa-connect-rtsp >/dev/null 2>&1 || true'
+    printf '%s\n' '    docker stop prusa-rtsp-live >/dev/null 2>&1 || true'
     printf '%s\n' '  fi'
     printf '%s\n' '  sleep 30' 'done'
   } >"$temporary_file"
@@ -78,15 +79,24 @@ nova_phase9_write_monitor() {
 }
 
 nova_phase9_write_env() {
-  local secrets_file env_file temporary_file camera_url token
+  local secrets_file env_file temporary_file camera_url token existing_value
   secrets_file="$(nova_phase1_root_path "/${NOVA_PHASE9_SECRETS_RELATIVE_PATH}")"
   env_file="$(nova_phase1_root_path "/${NOVA_PHASE9_ENV_RELATIVE_PATH}")"
   camera_url="$(nova_phase1_read_assignment "$secrets_file" CAMERA_URL)"
   token="$(nova_phase1_read_assignment "$secrets_file" TOKEN)"
+  if [[ -f "$env_file" && ! -L "$env_file" ]]; then
+    existing_value="$(nova_phase1_read_assignment "$env_file" CAMERA_URL || true)"
+    [[ -n "$existing_value" && "$existing_value" != CHANGE_ME_* ]] && camera_url="$existing_value"
+    existing_value="$(nova_phase1_read_assignment "$env_file" PRUSA_TOKEN || true)"
+    if [[ -z "$existing_value" || "$existing_value" == CHANGE_ME_* ]]; then
+      existing_value="$(nova_phase1_read_assignment "$env_file" TOKENS || true)"
+    fi
+    [[ -n "$existing_value" && "$existing_value" != CHANGE_ME_* ]] && token="$existing_value"
+  fi
   temporary_file="$(mktemp "${env_file}.candidate.XXXXXX")"
   {
-    printf 'RTSP_URLS=%s\n' "$camera_url"
-    printf 'TOKENS=%s\n' "$token"
+    printf 'CAMERA_URL=%s\n' "$camera_url"
+    printf 'PRUSA_TOKEN=%s\n' "$token"
   } >"$temporary_file"
   chmod 0600 -- "$temporary_file"
   chown root:root -- "$temporary_file"
@@ -106,15 +116,20 @@ nova_phase9_write_compose() {
   {
     printf '%s\n' \
       'services:' \
-      '  prusa-connect-rtsp:' \
-      '    image: jtee3d/prusa_connect_rtsp:latest' \
-      '    container_name: prusa-connect-rtsp' \
-      '    restart: unless-stopped' \
+      '  prusa-rtsp-live:' \
+      '    image: ghcr.io/s31teg/prusa-rtsp-live:1.0.0' \
+      '    container_name: prusa-rtsp-live' \
+      '    restart: "no"' \
+      '    network_mode: host' \
       '    env_file:' \
       '      - path: /opt/prusa/prusa.env' \
       '        format: raw' \
       '    environment:' \
-      '      PRUSA_URL: https://camera-service.prusa3d.com/c/snapshot' \
+      '      MODE: buddy3d' \
+      '      FINGERPRINT: camera0000000001' \
+      '      SNAPSHOTS: "true"' \
+      '      LIVE: "false"' \
+      '      TZ: Europe/Zurich' \
       '  prusa-monitor:' \
       '    image: alpine:latest' \
       '    container_name: prusa-monitor' \
@@ -138,6 +153,16 @@ nova_phase9_write_compose() {
   chown root:root -- "$compose"
 }
 
+nova_phase9_remove_legacy_container() {
+  if docker inspect "$NOVA_PHASE9_LEGACY_CAMERA_CONTAINER" >/dev/null 2>&1; then
+    nova_phase1_info "Removing the obsolete ${NOVA_PHASE9_LEGACY_CAMERA_CONTAINER} container."
+    if ! docker rm -f "$NOVA_PHASE9_LEGACY_CAMERA_CONTAINER" >/dev/null; then
+      nova_phase1_error "Could not remove the obsolete ${NOVA_PHASE9_LEGACY_CAMERA_CONTAINER} container."
+      return 1
+    fi
+  fi
+}
+
 nova_phase9_deploy() {
   local install_dir compose
   install_dir="$(nova_phase1_root_path "/${NOVA_PHASE9_INSTALL_DIR_RELATIVE_PATH}")"
@@ -146,6 +171,7 @@ nova_phase9_deploy() {
     nova_phase1_error "Prusa Docker Compose configuration is invalid."
     return 1
   fi
+  nova_phase9_remove_legacy_container
   nova_phase1_info "Starting the Prusa camera and monitor containers."
   if ! docker compose --project-directory "$install_dir" -f "$compose" up -d; then
     nova_phase1_error "Prusa camera stack deployment failed."

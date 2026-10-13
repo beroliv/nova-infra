@@ -124,7 +124,7 @@ done
 if have_cmd docker; then
   echo
   echo "${C_RED}${C_BOLD}Docker${C_RESET}"
-  EXPECTED_CONTAINERS=(prusa-monitor prusa-connect-rtsp adguardhome wg-easy caddy vaultwarden)
+  EXPECTED_CONTAINERS=(prusa-monitor prusa-rtsp-live adguardhome wg-easy caddy vaultwarden)
   RUNNING=0
   DOCKER_READY=0
   docker info >/dev/null 2>&1 && DOCKER_READY=1
